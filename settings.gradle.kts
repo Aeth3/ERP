@@ -1,1 +1,1 @@
-rootProject.name = "remnant-life"
+rootProject.name = "erp"
