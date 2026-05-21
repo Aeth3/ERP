@@ -8,9 +8,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.maiu.erp.modules.auth.domain.model.User;
-import com.maiu.erp.modules.auth.domain.repository.UserRepository;
-import com.maiu.erp.modules.auth.infrastructure.security.CustomUserDetails;
+import com.maiu.erp.modules.identity.domain.model.User;
+import com.maiu.erp.modules.identity.domain.repository.UserRepository;
+import com.maiu.erp.modules.identity.infrastructure.security.CustomUserDetails;
 import com.maiu.erp.shared.utils.JwtUtil;
 
 import jakarta.servlet.FilterChain;

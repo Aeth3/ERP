@@ -1,0 +1,71 @@
+package com.maiu.erp.modules.inventory.infrastructure.persistence.entity;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "sales_order_items")
+public class SalesOrderItemEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false)
+    private UUID salesOrderId;
+
+    @Column(nullable = false)
+    private UUID productId;
+
+    @Column(nullable = false)
+    private BigDecimal quantity;
+
+    @Column(nullable = false)
+    private BigDecimal unitPrice;
+
+    // =========================
+    // GETTERS AND SETTERS
+    // =========================
+
+    public UUID getId() {
+        return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public UUID getSalesOrderId() {
+        return salesOrderId;
+    }
+
+    public void setSalesOrderId(UUID salesOrderId) {
+        this.salesOrderId = salesOrderId;
+    }
+
+    public UUID getProductId() {
+        return productId;
+    }
+
+    public void setProductId(UUID productId) {
+        this.productId = productId;
+    }
+
+    public BigDecimal getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(BigDecimal quantity) {
+        this.quantity = quantity;
+    }
+
+    public BigDecimal getUnitPrice() {
+        return unitPrice;
+    }
+
+    public void setUnitPrice(BigDecimal unitPrice) {
+        this.unitPrice = unitPrice;
+    }
+}
