@@ -37,7 +37,7 @@ public class StockMovementEntity {
 
     private String remarks;
 
-    private UUID performedBy;
+    private Long performedBy;
 
     private Instant movementDate;
 
@@ -110,11 +110,11 @@ public class StockMovementEntity {
         this.referenceId = referenceId;
     }
 
-    public UUID getPerformedBy() {
+    public Long getPerformedBy() {
         return performedBy;
     }
 
-    public void setPerformedBy(UUID performedBy) {
+    public void setPerformedBy(Long performedBy) {
         this.performedBy = performedBy;
     }
 

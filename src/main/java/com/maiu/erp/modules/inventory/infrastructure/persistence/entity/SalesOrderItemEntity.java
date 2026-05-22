@@ -25,6 +25,9 @@ public class SalesOrderItemEntity {
     @Column(nullable = false)
     private BigDecimal unitPrice;
 
+    @Column(nullable = false)
+    private BigDecimal lineTotal;
+
     // =========================
     // GETTERS AND SETTERS
     // =========================
@@ -67,5 +70,13 @@ public class SalesOrderItemEntity {
 
     public void setUnitPrice(BigDecimal unitPrice) {
         this.unitPrice = unitPrice;
+    }
+
+    public BigDecimal getLineTotal() {
+        return lineTotal;
+    }
+
+    public void setLineTotal(BigDecimal lineTotal) {
+        this.lineTotal = lineTotal;
     }
 }

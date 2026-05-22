@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import com.maiu.erp.modules.inventory.domain.enums.MovementType;
 import com.maiu.erp.modules.inventory.domain.enums.SalesOrderStatus;
+import com.maiu.erp.modules.inventory.domain.model.Customer;
 import com.maiu.erp.modules.inventory.domain.model.InventoryStock;
 import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrder;
@@ -23,6 +24,7 @@ import com.maiu.erp.modules.inventory.domain.model.SalesOrderItem;
 import com.maiu.erp.modules.inventory.domain.model.StockMovement;
 import com.maiu.erp.modules.inventory.domain.model.Warehouse;
 import com.maiu.erp.modules.inventory.domain.repository.InventoryStockRepository;
+import com.maiu.erp.modules.inventory.domain.repository.CustomerRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderRepository;
@@ -38,6 +40,7 @@ class SalesOrderServiceTest {
         InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
         InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
         InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
 
         UUID productId = UUID.randomUUID();
@@ -62,7 +65,8 @@ class SalesOrderServiceTest {
                 salesOrderItemRepository,
                 inventoryService,
                 validationService,
-                productRepository);
+                productRepository,
+                customerRepository);
 
         salesOrderService.confirmSalesOrder(salesOrderId, warehouseId);
 
@@ -84,6 +88,7 @@ class SalesOrderServiceTest {
         InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
         InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
         InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
 
         UUID productId = UUID.randomUUID();
@@ -108,7 +113,8 @@ class SalesOrderServiceTest {
                 salesOrderItemRepository,
                 inventoryService,
                 validationService,
-                productRepository);
+                productRepository,
+                customerRepository);
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -132,12 +138,13 @@ class SalesOrderServiceTest {
         InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
         InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
         InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
 
         UUID productId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
         UUID salesOrderId = UUID.randomUUID();
-        UUID performedBy = UUID.randomUUID();
+        Long performedBy = 1L;
 
         productRepository.save(activeProduct(productId));
         warehouseRepository.save(activeWarehouse(warehouseId));
@@ -157,7 +164,8 @@ class SalesOrderServiceTest {
                 salesOrderItemRepository,
                 inventoryService,
                 validationService,
-                productRepository);
+                productRepository,
+                customerRepository);
 
         salesOrderService.shipSalesOrder(salesOrderId, warehouseId, performedBy);
 
@@ -191,6 +199,15 @@ class SalesOrderServiceTest {
         warehouse.setName("Main Warehouse");
         warehouse.setActive(true);
         return warehouse;
+    }
+
+    private static Customer activeCustomer(UUID customerId) {
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        customer.setCode("CUS-" + customerId.toString().substring(0, 8));
+        customer.setName("Default Customer");
+        customer.setActive(true);
+        return customer;
     }
 
     private static InventoryStock stock(
@@ -462,6 +479,44 @@ class SalesOrderServiceTest {
         public List<Warehouse> findActiveWarehouses() {
             return warehouses.values().stream()
                     .filter(warehouse -> Boolean.TRUE.equals(warehouse.getActive()))
+                    .toList();
+        }
+    }
+
+    private static final class InMemoryCustomerRepository
+            implements CustomerRepository {
+        private final Map<UUID, Customer> customers = new HashMap<>();
+
+        @Override
+        public Customer save(Customer customer) {
+            if (customer.getId() == null) {
+                customer.setId(UUID.randomUUID());
+            }
+            customers.put(customer.getId(), customer);
+            return customer;
+        }
+
+        @Override
+        public Optional<Customer> findById(UUID id) {
+            return Optional.ofNullable(customers.get(id));
+        }
+
+        @Override
+        public Optional<Customer> findByCode(String code) {
+            return customers.values().stream()
+                    .filter(customer -> code.equals(customer.getCode()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<Customer> findAll() {
+            return customers.values().stream().toList();
+        }
+
+        @Override
+        public List<Customer> findActiveCustomers() {
+            return customers.values().stream()
+                    .filter(customer -> Boolean.TRUE.equals(customer.getActive()))
                     .toList();
         }
     }

@@ -17,7 +17,7 @@ public class StockMovement {
     private UUID referenceId;
     private String remarks;
     private Instant movementDate;
-    private UUID performedBy;
+    private Long performedBy;
 
     public void setProductId(UUID productId) {
         this.productId = productId;
@@ -47,7 +47,7 @@ public class StockMovement {
         this.referenceId = referenceId;
     }
 
-    public void setPerformedBy(UUID performedBy) {
+    public void setPerformedBy(Long performedBy) {
         this.performedBy = performedBy;
     }
 
@@ -87,7 +87,7 @@ public class StockMovement {
         return referenceId;
     }
 
-    public UUID getPerformedBy() {
+    public Long getPerformedBy() {
         return performedBy;
     }
 

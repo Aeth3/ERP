@@ -16,8 +16,10 @@ import org.junit.jupiter.api.Test;
 import com.maiu.erp.modules.inventory.application.command.CreateProductCommand;
 import com.maiu.erp.modules.inventory.domain.model.Category;
 import com.maiu.erp.modules.inventory.domain.model.Product;
+import com.maiu.erp.modules.inventory.domain.model.Unit;
 import com.maiu.erp.modules.inventory.domain.repository.CategoryRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
+import com.maiu.erp.modules.inventory.domain.repository.UnitRepository;
 
 class ProductServiceTest {
 
@@ -25,12 +27,16 @@ class ProductServiceTest {
     void createProductPersistsProductWhenCategoryExists() {
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
+        InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
         UUID categoryId = UUID.randomUUID();
+        UUID unitId = UUID.randomUUID();
         categoryRepository.save(category(categoryId, "Spare Parts"));
+        unitRepository.save(unit(unitId, "Piece", "pc"));
 
         ProductService productService = new ProductService(
                 productRepository,
-                categoryRepository);
+                categoryRepository,
+                unitRepository);
 
         UUID productId = productService.createProduct(
                 new CreateProductCommand(
@@ -40,22 +46,25 @@ class ProductServiceTest {
                         new BigDecimal("100.00"),
                         new BigDecimal("150.00"),
                         categoryId,
-                        null));
+                        unitId));
 
         Product product = productRepository.findById(productId).orElseThrow();
         assertNotNull(product.getId());
         assertEquals("SKU-001", product.getSku());
         assertEquals(categoryId, product.getCategoryId());
+        assertEquals(unitId, product.getUnitId());
     }
 
     @Test
     void createProductFailsWhenCategoryDoesNotExist() {
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
+        InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
 
         ProductService productService = new ProductService(
                 productRepository,
-                categoryRepository);
+                categoryRepository,
+                unitRepository);
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -72,12 +81,47 @@ class ProductServiceTest {
         assertEquals("Category not found", exception.getMessage());
     }
 
+    @Test
+    void createProductFailsWhenUnitDoesNotExist() {
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
+        InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
+
+        ProductService productService = new ProductService(
+                productRepository,
+                categoryRepository,
+                unitRepository);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> productService.createProduct(
+                        new CreateProductCommand(
+                                "SKU-001",
+                                "Brake Pad",
+                                "Front brake pad",
+                                new BigDecimal("100.00"),
+                                new BigDecimal("150.00"),
+                                null,
+                                UUID.randomUUID())));
+
+        assertEquals("Unit not found", exception.getMessage());
+    }
+
     private static Category category(UUID id, String name) {
         Category category = new Category();
         category.setId(id);
         category.setName(name);
         category.setActive(true);
         return category;
+    }
+
+    private static Unit unit(UUID id, String name, String symbol) {
+        Unit unit = new Unit();
+        unit.setId(id);
+        unit.setName(name);
+        unit.setSymbol(symbol);
+        unit.setActive(true);
+        return unit;
     }
 
     private static final class InMemoryProductRepository
@@ -163,6 +207,44 @@ class ProductServiceTest {
         public List<Category> findByParentId(UUID parentId) {
             return categories.values().stream()
                     .filter(category -> parentId.equals(category.getParentId()))
+                    .toList();
+        }
+    }
+
+    private static final class InMemoryUnitRepository
+            implements UnitRepository {
+        private final Map<UUID, Unit> units = new HashMap<>();
+
+        @Override
+        public Unit save(Unit unit) {
+            if (unit.getId() == null) {
+                unit.setId(UUID.randomUUID());
+            }
+            units.put(unit.getId(), unit);
+            return unit;
+        }
+
+        @Override
+        public Optional<Unit> findById(UUID id) {
+            return Optional.ofNullable(units.get(id));
+        }
+
+        @Override
+        public Optional<Unit> findByName(String name) {
+            return units.values().stream()
+                    .filter(unit -> name.equalsIgnoreCase(unit.getName()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<Unit> findAll() {
+            return units.values().stream().toList();
+        }
+
+        @Override
+        public List<Unit> findActiveUnits() {
+            return units.values().stream()
+                    .filter(Unit::isActive)
                     .toList();
         }
     }

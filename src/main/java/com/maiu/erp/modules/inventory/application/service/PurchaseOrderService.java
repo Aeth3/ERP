@@ -120,7 +120,7 @@ public class PurchaseOrderService {
     public void receivePurchaseOrder(
             UUID purchaseOrderId,
             UUID warehouseId,
-            UUID performedBy) {
+            Long performedBy) {
 
         PurchaseOrder po = purchaseOrderRepository
                 .findById(purchaseOrderId)

@@ -10,18 +10,22 @@ import com.maiu.erp.modules.inventory.application.command.CreateProductCommand;
 import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.repository.CategoryRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
+import com.maiu.erp.modules.inventory.domain.repository.UnitRepository;
 
 @Service
 public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final UnitRepository unitRepository;
 
     public ProductService(
             ProductRepository productRepository,
-            CategoryRepository categoryRepository) {
+            CategoryRepository categoryRepository,
+            UnitRepository unitRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.unitRepository = unitRepository;
     }
 
     public UUID createProduct(CreateProductCommand command) {
@@ -32,6 +36,10 @@ public class ProductService {
         if (command.categoryId() != null) {
             categoryRepository.findById(command.categoryId())
                     .orElseThrow(() -> new RuntimeException("Category not found"));
+        }
+        if (command.unitId() != null) {
+            unitRepository.findById(command.unitId())
+                    .orElseThrow(() -> new RuntimeException("Unit not found"));
         }
 
         Product product = new Product();

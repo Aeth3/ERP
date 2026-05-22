@@ -10,6 +10,7 @@ import com.maiu.erp.modules.inventory.application.dto.CreateSalesOrderRequest;
 import com.maiu.erp.modules.inventory.domain.enums.SalesOrderStatus;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrder;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrderItem;
+import com.maiu.erp.modules.inventory.domain.repository.CustomerRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderRepository;
@@ -23,18 +24,21 @@ public class SalesOrderService {
     private final InventoryService inventoryService;
     private final InventoryValidationService inventoryValidationService;
     private final ProductRepository productRepository;
+    private final CustomerRepository customerRepository;
 
     public SalesOrderService(
             SalesOrderRepository salesOrderRepository,
             SalesOrderItemRepository salesOrderItemRepository,
             InventoryService inventoryService,
             InventoryValidationService inventoryValidationService,
-            ProductRepository productRepository) {
+            ProductRepository productRepository,
+            CustomerRepository customerRepository) {
         this.salesOrderRepository = salesOrderRepository;
         this.salesOrderItemRepository = salesOrderItemRepository;
         this.inventoryService = inventoryService;
         this.inventoryValidationService = inventoryValidationService;
         this.productRepository = productRepository;
+        this.customerRepository = customerRepository;
     }
 
     public List<SalesOrder> getSalesOrders() {
@@ -64,6 +68,8 @@ public class SalesOrderService {
         if (request.orderDate() == null) {
             throw new RuntimeException("Order date is required");
         }
+        customerRepository.findById(request.customerId())
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
 
         SalesOrder salesOrder = new SalesOrder();
         salesOrder.setSoNumber(generateSoNumber());
@@ -130,7 +136,7 @@ public class SalesOrderService {
     public void shipSalesOrder(
             UUID salesOrderId,
             UUID warehouseId,
-            UUID performedBy) {
+            Long performedBy) {
         inventoryValidationService.validateWarehouseExists(warehouseId);
         SalesOrder salesOrder = salesOrderRepository.findById(salesOrderId)
                 .orElseThrow(() -> new RuntimeException("Sales Order not found"));

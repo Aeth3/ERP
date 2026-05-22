@@ -1,6 +1,7 @@
 package com.maiu.erp.modules.inventory.presentation.controller;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
@@ -24,12 +25,15 @@ public class InventoryStockController {
     }
 
     @GetMapping
-    public ResponseEntity<?> getStocks(
+    public ResponseEntity<List<InventoryStockDto>> getStocks(
             @RequestParam(required = false) UUID productId,
             @RequestParam(required = false) UUID warehouseId) {
         if (productId != null && warehouseId != null) {
             return ResponseEntity.ok(
-                    toDto(inventoryService.getStock(productId, warehouseId)));
+                    inventoryService.findStock(productId, warehouseId)
+                            .map(this::toDto)
+                            .stream()
+                            .toList());
         }
 
         if (productId != null) {

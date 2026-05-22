@@ -17,9 +17,11 @@ import org.junit.jupiter.api.Test;
 import com.maiu.erp.modules.inventory.application.dto.CreateSalesOrderItemRequest;
 import com.maiu.erp.modules.inventory.application.dto.CreateSalesOrderRequest;
 import com.maiu.erp.modules.inventory.domain.enums.SalesOrderStatus;
+import com.maiu.erp.modules.inventory.domain.model.Customer;
 import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrder;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrderItem;
+import com.maiu.erp.modules.inventory.domain.repository.CustomerRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderRepository;
@@ -33,10 +35,12 @@ class SalesOrderCreationServiceTest {
         InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
         InMemorySalesOrderItemRepository itemRepository = new InMemorySalesOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
 
         UUID customerId = UUID.randomUUID();
         UUID productOneId = UUID.randomUUID();
         UUID productTwoId = UUID.randomUUID();
+        customerRepository.save(activeCustomer(customerId));
         productRepository.save(activeProduct(productOneId));
         productRepository.save(activeProduct(productTwoId));
 
@@ -45,7 +49,8 @@ class SalesOrderCreationServiceTest {
                 itemRepository,
                 null,
                 null,
-                productRepository);
+                productRepository,
+                customerRepository);
 
         UUID salesOrderId = salesOrderService.createSalesOrder(
                 new CreateSalesOrderRequest(
@@ -77,13 +82,15 @@ class SalesOrderCreationServiceTest {
         InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
         InMemorySalesOrderItemRepository itemRepository = new InMemorySalesOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
 
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 itemRepository,
                 null,
                 null,
-                productRepository);
+                productRepository,
+                customerRepository);
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -99,11 +106,52 @@ class SalesOrderCreationServiceTest {
         assertEquals("Product not found", exception.getMessage());
     }
 
+    @Test
+    void createSalesOrderFailsWhenCustomerDoesNotExist() {
+        InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
+        InMemorySalesOrderItemRepository itemRepository = new InMemorySalesOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
+
+        UUID productId = UUID.randomUUID();
+        productRepository.save(activeProduct(productId));
+
+        SalesOrderService salesOrderService = new SalesOrderService(
+                salesOrderRepository,
+                itemRepository,
+                null,
+                null,
+                productRepository,
+                customerRepository);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> salesOrderService.createSalesOrder(
+                        new CreateSalesOrderRequest(
+                                UUID.randomUUID(),
+                                LocalDate.of(2026, 5, 21),
+                                List.of(new CreateSalesOrderItemRequest(
+                                        productId,
+                                        BigDecimal.ONE,
+                                        BigDecimal.TEN)))));
+
+        assertEquals("Customer not found", exception.getMessage());
+    }
+
     private static Product activeProduct(UUID productId) {
         Product product = new Product();
         product.setId(productId);
         product.setActive(true);
         return product;
+    }
+
+    private static Customer activeCustomer(UUID customerId) {
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        customer.setCode("CUS-" + customerId.toString().substring(0, 8));
+        customer.setName("Default Customer");
+        customer.setActive(true);
+        return customer;
     }
 
     private static final class InMemorySalesOrderRepository
@@ -217,6 +265,44 @@ class SalesOrderCreationServiceTest {
         public boolean existsBySku(String sku) {
             return products.values().stream()
                     .anyMatch(product -> sku.equals(product.getSku()));
+        }
+    }
+
+    private static final class InMemoryCustomerRepository
+            implements CustomerRepository {
+        private final Map<UUID, Customer> customers = new HashMap<>();
+
+        @Override
+        public Customer save(Customer customer) {
+            if (customer.getId() == null) {
+                customer.setId(UUID.randomUUID());
+            }
+            customers.put(customer.getId(), customer);
+            return customer;
+        }
+
+        @Override
+        public Optional<Customer> findById(UUID id) {
+            return Optional.ofNullable(customers.get(id));
+        }
+
+        @Override
+        public Optional<Customer> findByCode(String code) {
+            return customers.values().stream()
+                    .filter(customer -> code.equals(customer.getCode()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<Customer> findAll() {
+            return customers.values().stream().toList();
+        }
+
+        @Override
+        public List<Customer> findActiveCustomers() {
+            return customers.values().stream()
+                    .filter(customer -> Boolean.TRUE.equals(customer.getActive()))
+                    .toList();
         }
     }
 }

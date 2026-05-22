@@ -73,6 +73,9 @@ public class SalesOrderItemRepositoryImpl
         item.setUnitPrice(
                 entity.getUnitPrice());
 
+        item.setLineTotal(
+                entity.getLineTotal());
+
         return item;
     }
 
@@ -95,6 +98,9 @@ public class SalesOrderItemRepositoryImpl
 
         entity.setUnitPrice(
                 item.getUnitPrice());
+
+        entity.setLineTotal(
+                item.getLineTotal());
 
         return entity;
     }

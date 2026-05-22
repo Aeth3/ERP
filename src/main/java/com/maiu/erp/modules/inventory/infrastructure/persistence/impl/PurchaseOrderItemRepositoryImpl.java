@@ -74,6 +74,9 @@ public class PurchaseOrderItemRepositoryImpl
         item.setUnitCost(
                 entity.getUnitCost());
 
+        item.setLineTotal(
+                entity.getLineTotal());
+
         return item;
     }
 
@@ -96,6 +99,9 @@ public class PurchaseOrderItemRepositoryImpl
 
         entity.setUnitCost(
                 item.getUnitCost());
+
+        entity.setLineTotal(
+                item.getLineTotal());
 
         return entity;
     }

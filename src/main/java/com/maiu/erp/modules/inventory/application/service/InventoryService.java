@@ -3,6 +3,7 @@ package com.maiu.erp.modules.inventory.application.service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -37,7 +38,7 @@ public class InventoryService {
             BigDecimal unitCost,
             String referenceType,
             UUID referenceId,
-            UUID performedBy) {
+            Long performedBy) {
         validatePositiveQuantity(quantity);
 
         InventoryStock stock = getOrCreateStock(productId, warehouseId);
@@ -71,7 +72,7 @@ public class InventoryService {
             BigDecimal unitCost,
             String referenceType,
             UUID referenceId,
-            UUID performedBy) {
+            Long performedBy) {
         validatePositiveQuantity(quantity);
         InventoryStock stock = inventoryStockRepository
                 .findByProductIdAndWarehouseId(productId, warehouseId)
@@ -169,6 +170,13 @@ public class InventoryService {
         return inventoryStockRepository
                 .findByProductIdAndWarehouseId(productId, warehouseId)
                 .orElseThrow(() -> new RuntimeException("Stock not found"));
+    }
+
+    public Optional<InventoryStock> findStock(
+            UUID productId,
+            UUID warehouseId) {
+        return inventoryStockRepository
+                .findByProductIdAndWarehouseId(productId, warehouseId);
     }
 
     public List<InventoryStock> getStocksByProduct(
