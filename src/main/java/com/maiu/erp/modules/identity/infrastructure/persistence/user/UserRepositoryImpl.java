@@ -35,6 +35,8 @@ public class UserRepositoryImpl implements UserRepository {
         entity.setName(user.getName());
         entity.setEmail(user.getEmail());
         entity.setPassword(user.getPassword());
+        entity.setEmailVerified(user.isEmailVerified());
+        entity.setTenantId(user.getTenantId());
 
         // ✅ Map roles properly
         entity.setRoles(
@@ -64,6 +66,7 @@ public class UserRepositoryImpl implements UserRepository {
 
         user.setId(e.getId());
         user.setTenantId(e.getTenantId());
+        user.setEmailVerified(e.isEmailVerified());
 
         return user;
     }
@@ -73,6 +76,12 @@ public class UserRepositoryImpl implements UserRepository {
         return jpaRepository.findAll().stream()
                 .map(this::toDomain)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<User> findById(Long id) {
+        return jpaRepository.findById(id)
+                .map(this::toDomain);
     }
 
     @Override

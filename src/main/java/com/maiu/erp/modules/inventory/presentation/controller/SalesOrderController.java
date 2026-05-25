@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.maiu.erp.modules.inventory.application.dto.ActionResponse;
+import com.maiu.erp.modules.inventory.application.dto.CancelSalesOrderRequest;
 import com.maiu.erp.modules.inventory.application.dto.ConfirmSalesOrderRequest;
 import com.maiu.erp.modules.inventory.application.dto.CreateSalesOrderRequest;
 import com.maiu.erp.modules.inventory.application.dto.IdResponse;
@@ -78,6 +79,18 @@ public class SalesOrderController {
 
         return ResponseEntity.ok(
                 new ActionResponse("Sales order shipped successfully"));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ActionResponse> cancelSalesOrder(
+            @PathVariable UUID id,
+            @RequestBody(required = false) CancelSalesOrderRequest request) {
+        salesOrderService.cancelSalesOrder(
+                id,
+                request == null ? null : request.warehouseId());
+
+        return ResponseEntity.ok(
+                new ActionResponse("Sales order cancelled successfully"));
     }
 
     private SalesOrderDto toDto(SalesOrder salesOrder) {

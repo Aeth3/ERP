@@ -1,3 +1,22 @@
+# backend env setup
+copy .env.example .env
+
+# run locally with dev profile
+cd ERP
+./gradlew bootRun --args="--spring.profiles.active=dev"
+
+# alternative powershell form
+$env:SPRING_PROFILES_ACTIVE="dev"
+.\gradlew bootRun
+
+# dev profile notes
+# loads application.properties first, then overrides with application-dev.properties
+# also imports ERP/.env and ERP/.env.local if present
+# requires MySQL running at localhost:3306 with database maiu_db
+# seeds a default admin in dev:
+# email: admin@maiu.local
+# password: admin123
+
 # local
 docker compose up -d
 

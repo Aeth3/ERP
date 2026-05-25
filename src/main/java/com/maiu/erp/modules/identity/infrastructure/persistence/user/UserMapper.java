@@ -12,6 +12,7 @@ public class UserMapper {
         user.setEmail(entity.getEmail());
         user.setPassword(entity.getPassword());
         user.setTenantId(entity.getTenantId());
+        user.setEmailVerified(entity.isEmailVerified());
         return user;
     }
 
@@ -21,6 +22,7 @@ public class UserMapper {
         entity.setEmail(domain.getEmail());
         entity.setPassword(domain.getPassword());
         entity.setTenantId(domain.getTenantId());
+        entity.setEmailVerified(domain.isEmailVerified());
         return entity;
     }
 }

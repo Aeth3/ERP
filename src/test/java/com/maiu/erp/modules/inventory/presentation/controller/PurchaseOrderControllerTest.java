@@ -73,6 +73,17 @@ class PurchaseOrderControllerTest {
     }
 
     @Test
+    void cancelPurchaseOrderReturnsSuccessMessage() throws Exception {
+        UUID purchaseOrderId = UUID.randomUUID();
+
+        mockMvc.perform(post("/inventory/purchase-orders/{id}/cancel", purchaseOrderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Purchase order cancelled successfully"));
+
+        verify(purchaseOrderService).cancelPurchaseOrder(eq(purchaseOrderId));
+    }
+
+    @Test
     void createPurchaseOrderReturnsBadRequestWhenItemsMissing() throws Exception {
         mockMvc.perform(post("/inventory/purchase-orders")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -78,6 +78,15 @@ public class PurchaseOrderController {
                 new ActionResponse("Purchase order received successfully"));
     }
 
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ActionResponse> cancelPurchaseOrder(
+            @PathVariable UUID id) {
+        purchaseOrderService.cancelPurchaseOrder(id);
+
+        return ResponseEntity.ok(
+                new ActionResponse("Purchase order cancelled successfully"));
+    }
+
     private PurchaseOrderDto toDto(PurchaseOrder purchaseOrder) {
         List<PurchaseOrderItemDto> items = purchaseOrderService
                 .getPurchaseOrderItems(purchaseOrder.getId())
@@ -89,6 +98,7 @@ public class PurchaseOrderController {
                 purchaseOrder.getId(),
                 purchaseOrder.getPoNumber(),
                 purchaseOrder.getSupplierId(),
+                purchaseOrder.getProjectId(),
                 purchaseOrder.getStatus(),
                 purchaseOrder.getOrderDate(),
                 purchaseOrder.getExpectedDate(),

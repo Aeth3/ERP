@@ -11,7 +11,6 @@ import com.maiu.erp.modules.identity.application.dto.AuthDto;
 import com.maiu.erp.modules.identity.application.dto.RegisterRequest;
 import com.maiu.erp.modules.identity.domain.model.Role;
 import com.maiu.erp.modules.identity.domain.model.User;
-import com.maiu.erp.modules.identity.domain.repository.RoleRepository;
 import com.maiu.erp.modules.identity.domain.repository.UserRepository;
 import com.maiu.erp.shared.utils.JwtUtil;
 
@@ -21,16 +20,22 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder encoder;
     private final JwtUtil jwtUtil;
-    private final RoleRepository roleRepository;
+    private final DefaultRoleService defaultRoleService;
+    private final DefaultTenantService defaultTenantService;
+    private final EmailVerificationService emailVerificationService;
 
     public AuthService(UserRepository userRepository,
             PasswordEncoder encoder,
             JwtUtil jwtUtil,
-            RoleRepository roleRepository) {
+            DefaultRoleService defaultRoleService,
+            DefaultTenantService defaultTenantService,
+            EmailVerificationService emailVerificationService) {
         this.userRepository = userRepository;
         this.encoder = encoder;
         this.jwtUtil = jwtUtil;
-        this.roleRepository = roleRepository;
+        this.defaultRoleService = defaultRoleService;
+        this.defaultTenantService = defaultTenantService;
+        this.emailVerificationService = emailVerificationService;
     }
 
     public void register(RegisterRequest request) {
@@ -41,14 +46,7 @@ public class AuthService {
             throw new RuntimeException("Email already exists");
         }
 
-        Optional<Role> roleOpt = roleRepository.findByName("USER");
-
-        System.out.println("ROLE FOUND? " + roleOpt.isPresent());
-
-        roleOpt.ifPresent(r -> System.out.println("ROLE: " + r.getName()));
-
-        Role userRole = roleOpt
-                .orElseThrow(() -> new RuntimeException("Default role USER not found"));
+        Role userRole = defaultRoleService.getOrCreateUserRole();
 
         Set<Role> roles = Set.of(userRole);
 
@@ -57,8 +55,11 @@ public class AuthService {
                 email,
                 encoder.encode(request.getPassword()),
                 roles);
+        user.setEmailVerified(false);
+        user.setTenantId(defaultTenantService.getDefaultTenantId());
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        emailVerificationService.createAndSendVerification(savedUser);
     }
 
     public AuthDto login(String email, String password) {
@@ -71,6 +72,9 @@ public class AuthService {
         if (!encoder.matches(password, user.getPassword())) {
             throw new RuntimeException("Invalid credentials");
         }
+        if (!user.isEmailVerified()) {
+            throw new RuntimeException("Please confirm your email before signing in");
+        }
 
         Set<String> roles = user.getRoles().stream()
                 .map(Role::getAuthority)
@@ -79,5 +83,9 @@ public class AuthService {
         String token = jwtUtil.generateToken(user.getEmail(), roles);
 
         return new AuthDto(user.getId(), token, user.getName(), roles);
+    }
+
+    public void confirmEmail(String token) {
+        emailVerificationService.verifyToken(token);
     }
 }

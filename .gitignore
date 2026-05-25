@@ -40,3 +40,6 @@ out/
 /src/main/resources/application.properties
 application.yml
 docker-compose*.yml
+.env
+.env.local
+!.env.example

@@ -83,6 +83,8 @@ class SalesOrderCreationServiceTest {
         InMemorySalesOrderItemRepository itemRepository = new InMemorySalesOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
+        UUID customerId = UUID.randomUUID();
+        customerRepository.save(activeCustomer(customerId));
 
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
@@ -96,7 +98,7 @@ class SalesOrderCreationServiceTest {
                 RuntimeException.class,
                 () -> salesOrderService.createSalesOrder(
                         new CreateSalesOrderRequest(
-                                UUID.randomUUID(),
+                                customerId,
                                 LocalDate.of(2026, 5, 21),
                                 List.of(new CreateSalesOrderItemRequest(
                                         UUID.randomUUID(),
@@ -242,6 +244,20 @@ class SalesOrderCreationServiceTest {
             return products.values().stream()
                     .filter(product -> sku.equals(product.getSku()))
                     .findFirst();
+        }
+
+        @Override
+        public List<Product> findByCategoryId(UUID categoryId) {
+            return products.values().stream()
+                    .filter(product -> categoryId.equals(product.getCategoryId()))
+                    .toList();
+        }
+
+        @Override
+        public List<Product> findByUnitId(UUID unitId) {
+            return products.values().stream()
+                    .filter(product -> unitId.equals(product.getUnitId()))
+                    .toList();
         }
 
         @Override

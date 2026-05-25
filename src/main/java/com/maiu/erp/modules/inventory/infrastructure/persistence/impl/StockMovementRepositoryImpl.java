@@ -36,6 +36,15 @@ public class StockMovementRepositoryImpl
     }
 
     @Override
+    public List<StockMovement> findAll() {
+        return jpaRepository
+                .findAll()
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<StockMovement> findByProductId(
             UUID productId) {
 
@@ -94,6 +103,9 @@ public class StockMovementRepositoryImpl
         movement.setWarehouseId(
                 entity.getWarehouseId());
 
+        movement.setProjectId(
+                entity.getProjectId());
+
         movement.setMovementType(
                 entity.getMovementType());
 
@@ -108,6 +120,9 @@ public class StockMovementRepositoryImpl
 
         movement.setReferenceId(
                 entity.getReferenceId());
+
+        movement.setRemarks(
+                entity.getRemarks());
 
         movement.setPerformedBy(
                 entity.getPerformedBy());
@@ -132,6 +147,9 @@ public class StockMovementRepositoryImpl
         entity.setWarehouseId(
                 movement.getWarehouseId());
 
+        entity.setProjectId(
+                movement.getProjectId());
+
         entity.setMovementType(
                 movement.getMovementType());
 
@@ -146,6 +164,9 @@ public class StockMovementRepositoryImpl
 
         entity.setReferenceId(
                 movement.getReferenceId());
+
+        entity.setRemarks(
+                movement.getRemarks());
 
         entity.setPerformedBy(
                 movement.getPerformedBy());

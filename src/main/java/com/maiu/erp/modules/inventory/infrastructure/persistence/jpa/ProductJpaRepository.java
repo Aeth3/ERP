@@ -15,5 +15,9 @@ public interface ProductJpaRepository
 
     Optional<ProductEntity> findBySku(String sku);
 
+    List<ProductEntity> findByCategoryId(UUID categoryId);
+
+    List<ProductEntity> findByUnitId(UUID unitId);
+
     List<ProductEntity> findByActiveTrue();
 }

@@ -10,6 +10,7 @@ public class StockMovement {
     private UUID id;
     private UUID productId;
     private UUID warehouseId;
+    private UUID projectId;
     private MovementType movementType;
     private BigDecimal quantity;
     private BigDecimal unitCost;
@@ -17,7 +18,7 @@ public class StockMovement {
     private UUID referenceId;
     private String remarks;
     private Instant movementDate;
-    private Long performedBy;
+    private String performedBy;
 
     public void setProductId(UUID productId) {
         this.productId = productId;
@@ -29,6 +30,10 @@ public class StockMovement {
 
     public void setMovementType(MovementType movementType) {
         this.movementType = movementType;
+    }
+
+    public void setProjectId(UUID projectId) {
+        this.projectId = projectId;
     }
 
     public void setQuantity(BigDecimal quantity) {
@@ -47,7 +52,7 @@ public class StockMovement {
         this.referenceId = referenceId;
     }
 
-    public void setPerformedBy(Long performedBy) {
+    public void setPerformedBy(String performedBy) {
         this.performedBy = performedBy;
     }
 
@@ -71,6 +76,10 @@ public class StockMovement {
         return movementType;
     }
 
+    public UUID getProjectId() {
+        return projectId;
+    }
+
     public BigDecimal getQuantity() {
         return quantity;
     }
@@ -87,7 +96,7 @@ public class StockMovement {
         return referenceId;
     }
 
-    public Long getPerformedBy() {
+    public String getPerformedBy() {
         return performedBy;
     }
 

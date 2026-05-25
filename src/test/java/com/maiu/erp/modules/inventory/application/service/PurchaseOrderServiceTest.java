@@ -26,6 +26,8 @@ import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseOrderRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SupplierRepository;
+import com.maiu.erp.modules.project.domain.model.Project;
+import com.maiu.erp.modules.project.domain.repository.ProjectRepository;
 
 class PurchaseOrderServiceTest {
 
@@ -35,6 +37,7 @@ class PurchaseOrderServiceTest {
         InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
 
         UUID supplierId = UUID.randomUUID();
         UUID productOneId = UUID.randomUUID();
@@ -48,11 +51,13 @@ class PurchaseOrderServiceTest {
                 itemRepository,
                 null,
                 productRepository,
-                supplierRepository);
+                supplierRepository,
+                projectRepository);
 
         UUID purchaseOrderId = purchaseOrderService.createPurchaseOrder(
                 new CreatePurchaseOrderRequest(
                         supplierId,
+                        null,
                         LocalDate.of(2026, 5, 21),
                         LocalDate.of(2026, 5, 28),
                         List.of(
@@ -82,6 +87,7 @@ class PurchaseOrderServiceTest {
         InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
 
         PurchaseOrder purchaseOrder = new PurchaseOrder();
         purchaseOrder.setId(UUID.randomUUID());
@@ -103,7 +109,8 @@ class PurchaseOrderServiceTest {
                 itemRepository,
                 null,
                 productRepository,
-                supplierRepository);
+                supplierRepository,
+                projectRepository);
 
         purchaseOrderService.approvePurchaseOrder(purchaseOrder.getId());
 
@@ -118,6 +125,7 @@ class PurchaseOrderServiceTest {
         InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
         UUID supplierId = UUID.randomUUID();
         supplierRepository.save(activeSupplier(supplierId));
 
@@ -126,13 +134,15 @@ class PurchaseOrderServiceTest {
                 itemRepository,
                 null,
                 productRepository,
-                supplierRepository);
+                supplierRepository,
+                projectRepository);
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
                 () -> purchaseOrderService.createPurchaseOrder(
                         new CreatePurchaseOrderRequest(
                                 supplierId,
+                                null,
                                 LocalDate.of(2026, 5, 21),
                                 null,
                                 List.of(new CreatePurchaseOrderItemRequest(
@@ -149,6 +159,7 @@ class PurchaseOrderServiceTest {
         InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
 
         UUID productId = UUID.randomUUID();
         productRepository.save(activeProduct(productId));
@@ -158,13 +169,15 @@ class PurchaseOrderServiceTest {
                 itemRepository,
                 null,
                 productRepository,
-                supplierRepository);
+                supplierRepository,
+                projectRepository);
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
                 () -> purchaseOrderService.createPurchaseOrder(
                         new CreatePurchaseOrderRequest(
                                 UUID.randomUUID(),
+                                null,
                                 LocalDate.of(2026, 5, 21),
                                 null,
                                 List.of(new CreatePurchaseOrderItemRequest(
@@ -173,6 +186,133 @@ class PurchaseOrderServiceTest {
                                         BigDecimal.TEN)))));
 
         assertEquals("Supplier not found", exception.getMessage());
+    }
+
+    @Test
+    void cancelDraftPurchaseOrderMarksOrderCancelled() {
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        PurchaseOrder purchaseOrder = new PurchaseOrder();
+        purchaseOrder.setId(UUID.randomUUID());
+        purchaseOrder.setPoNumber("PO-TEST-002");
+        purchaseOrder.setStatus(PurchaseOrderStatus.DRAFT);
+        purchaseOrderRepository.save(purchaseOrder);
+
+        PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
+                purchaseOrderRepository,
+                itemRepository,
+                null,
+                productRepository,
+                supplierRepository,
+                projectRepository);
+
+        purchaseOrderService.cancelPurchaseOrder(purchaseOrder.getId());
+
+        assertEquals(
+                PurchaseOrderStatus.CANCELLED,
+                purchaseOrderRepository.findById(purchaseOrder.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void cancelApprovedPurchaseOrderMarksOrderCancelled() {
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        PurchaseOrder purchaseOrder = new PurchaseOrder();
+        purchaseOrder.setId(UUID.randomUUID());
+        purchaseOrder.setPoNumber("PO-TEST-003");
+        purchaseOrder.setStatus(PurchaseOrderStatus.APPROVED);
+        purchaseOrderRepository.save(purchaseOrder);
+
+        PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
+                purchaseOrderRepository,
+                itemRepository,
+                null,
+                productRepository,
+                supplierRepository,
+                projectRepository);
+
+        purchaseOrderService.cancelPurchaseOrder(purchaseOrder.getId());
+
+        assertEquals(
+                PurchaseOrderStatus.CANCELLED,
+                purchaseOrderRepository.findById(purchaseOrder.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void cancelReceivedPurchaseOrderFails() {
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        PurchaseOrder purchaseOrder = new PurchaseOrder();
+        purchaseOrder.setId(UUID.randomUUID());
+        purchaseOrder.setPoNumber("PO-TEST-004");
+        purchaseOrder.setStatus(PurchaseOrderStatus.RECEIVED);
+        purchaseOrderRepository.save(purchaseOrder);
+
+        PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
+                purchaseOrderRepository,
+                itemRepository,
+                null,
+                productRepository,
+                supplierRepository,
+                projectRepository);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> purchaseOrderService.cancelPurchaseOrder(purchaseOrder.getId()));
+
+        assertEquals("Received purchase orders cannot be cancelled", exception.getMessage());
+        assertEquals(
+                PurchaseOrderStatus.RECEIVED,
+                purchaseOrderRepository.findById(purchaseOrder.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void createPurchaseOrderFailsWhenProjectDoesNotExist() {
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        UUID supplierId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        supplierRepository.save(activeSupplier(supplierId));
+        productRepository.save(activeProduct(productId));
+
+        PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
+                purchaseOrderRepository,
+                itemRepository,
+                null,
+                productRepository,
+                supplierRepository,
+                projectRepository);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> purchaseOrderService.createPurchaseOrder(
+                        new CreatePurchaseOrderRequest(
+                                supplierId,
+                                UUID.randomUUID(),
+                                LocalDate.of(2026, 5, 21),
+                                null,
+                                List.of(new CreatePurchaseOrderItemRequest(
+                                        productId,
+                                        BigDecimal.ONE,
+                                        BigDecimal.TEN)))));
+
+        assertEquals("Project not found", exception.getMessage());
     }
 
     private static Product activeProduct(UUID productId) {
@@ -227,6 +367,13 @@ class PurchaseOrderServiceTest {
                     .filter(order -> supplierId.equals(order.getSupplierId()))
                     .toList();
         }
+
+        @Override
+        public List<PurchaseOrder> findByProjectId(UUID projectId) {
+            return purchaseOrders.values().stream()
+                    .filter(order -> projectId.equals(order.getProjectId()))
+                    .toList();
+        }
     }
 
     private static final class InMemoryPurchaseOrderItemRepository
@@ -279,6 +426,20 @@ class PurchaseOrderServiceTest {
             return products.values().stream()
                     .filter(product -> sku.equals(product.getSku()))
                     .findFirst();
+        }
+
+        @Override
+        public List<Product> findByCategoryId(UUID categoryId) {
+            return products.values().stream()
+                    .filter(product -> categoryId.equals(product.getCategoryId()))
+                    .toList();
+        }
+
+        @Override
+        public List<Product> findByUnitId(UUID unitId) {
+            return products.values().stream()
+                    .filter(product -> unitId.equals(product.getUnitId()))
+                    .toList();
         }
 
         @Override
@@ -340,6 +501,36 @@ class PurchaseOrderServiceTest {
             return suppliers.values().stream()
                     .filter(supplier -> Boolean.TRUE.equals(supplier.getActive()))
                     .toList();
+        }
+    }
+
+    private static final class InMemoryProjectRepository implements ProjectRepository {
+        private final Map<UUID, Project> projects = new HashMap<>();
+
+        @Override
+        public Project save(Project project) {
+            if (project.getId() == null) {
+                project.setId(UUID.randomUUID());
+            }
+            projects.put(project.getId(), project);
+            return project;
+        }
+
+        @Override
+        public Optional<Project> findById(UUID id) {
+            return Optional.ofNullable(projects.get(id));
+        }
+
+        @Override
+        public Optional<Project> findByProjectCode(String projectCode) {
+            return projects.values().stream()
+                    .filter(project -> projectCode.equals(project.getProjectCode()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<Project> findAll() {
+            return projects.values().stream().toList();
         }
     }
 }

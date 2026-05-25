@@ -51,6 +51,24 @@ public class ProductRepositoryImpl
     }
 
     @Override
+    public List<Product> findByCategoryId(UUID categoryId) {
+        return jpaRepository
+                .findByCategoryId(categoryId)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Product> findByUnitId(UUID unitId) {
+        return jpaRepository
+                .findByUnitId(unitId)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<Product> findAll() {
 
         return jpaRepository

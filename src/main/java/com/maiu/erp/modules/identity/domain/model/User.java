@@ -10,6 +10,7 @@ public class User {
     private String password;
     private Set<Role> roles;
     private Long tenantId;
+    private boolean emailVerified;
 
     public User() {
     }
@@ -46,6 +47,10 @@ public class User {
         return roles;
     }
 
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
     public void setId(Long id) {
         this.id = id;
     }
@@ -68,5 +73,9 @@ public class User {
 
     public void setRoles(Set<Role> roles) {
         this.roles = roles;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
     }
 }

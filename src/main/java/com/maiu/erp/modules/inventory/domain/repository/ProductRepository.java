@@ -11,6 +11,10 @@ public interface ProductRepository {
 
     Optional<Product> findBySku(String sku);
 
+    List<Product> findByCategoryId(UUID categoryId);
+
+    List<Product> findByUnitId(UUID unitId);
+
     List<Product> findAll();
 
     List<Product> findActiveProducts();

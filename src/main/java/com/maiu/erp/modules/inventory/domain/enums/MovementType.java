@@ -7,5 +7,6 @@ public enum MovementType {
     ADJUSTMENT,
     RETURN,
     PURCHASE_IN,
-    SALES_OUT
+    SALES_OUT,
+    PROJECT_ISSUE
 }

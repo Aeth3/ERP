@@ -26,6 +26,8 @@ public class UserEntity {
     @Column(unique = true)
     private String email;
     private String password;
+    @Column(nullable = false)
+    private boolean emailVerified;
     @Column(name = "tenant_id", nullable = false)
     private Long tenantId;
     @ManyToMany(fetch = FetchType.LAZY)
@@ -70,6 +72,14 @@ public class UserEntity {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
     }
 
     public Set<RoleEntity> getRoles() {

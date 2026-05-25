@@ -1,19 +1,18 @@
 package com.maiu.erp.shared.exception;
 
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.*;
-
 import java.util.HashMap;
 import java.util.Map;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // ✅ Handle validation errors
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> handleValidation(MethodArgumentNotValidException ex) {
-
         Map<String, String> errors = new HashMap<>();
 
         ex.getBindingResult().getFieldErrors()
@@ -22,14 +21,30 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(errors);
     }
 
-    // ✅ Handle runtime errors (your original)
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<?> handleBusiness(BusinessException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(
+                Map.of(
+                        "code", ex.getCode(),
+                        "error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<?> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(
+                Map.of(
+                        "code", "BAD_REQUEST",
+                        "error", ex.getMessage()));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<?> handleRuntime(RuntimeException ex) {
         return ResponseEntity.badRequest().body(
-                Map.of("error", ex.getMessage()));
+                Map.of(
+                        "code", "RUNTIME_ERROR",
+                        "error", ex.getMessage()));
     }
 
-    // ✅ Catch-all (important for production)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleGeneral(Exception ex) {
         return ResponseEntity.internalServerError().body(

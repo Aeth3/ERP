@@ -6,13 +6,21 @@ import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.maiu.erp.modules.inventory.application.dto.ActionResponse;
+import com.maiu.erp.modules.inventory.application.dto.CreateStockAdjustmentRequest;
+import com.maiu.erp.modules.inventory.application.dto.CreateStockTransferRequest;
 import com.maiu.erp.modules.inventory.application.dto.InventoryStockDto;
 import com.maiu.erp.modules.inventory.application.service.InventoryService;
 import com.maiu.erp.modules.inventory.domain.model.InventoryStock;
+import com.maiu.erp.shared.exception.BadRequestException;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/inventory/stocks")
@@ -50,7 +58,39 @@ public class InventoryStockController {
                             .toList());
         }
 
-        throw new RuntimeException("Provide productId, warehouseId, or both");
+        throw new BadRequestException("Provide productId, warehouseId, or both");
+    }
+
+    @PostMapping("/adjustments")
+    public ResponseEntity<ActionResponse> createStockAdjustment(
+            @Valid @RequestBody CreateStockAdjustmentRequest request) {
+        inventoryService.adjustStock(
+                request.productId(),
+                request.warehouseId(),
+                request.adjustmentType(),
+                request.quantity(),
+                request.unitCost(),
+                request.reason(),
+                request.notes(),
+                request.performedBy());
+
+        return ResponseEntity.ok(new ActionResponse("Stock adjusted successfully"));
+    }
+
+    @PostMapping("/transfers")
+    public ResponseEntity<ActionResponse> createStockTransfer(
+            @Valid @RequestBody CreateStockTransferRequest request) {
+        inventoryService.transferStock(
+                request.productId(),
+                request.fromWarehouseId(),
+                request.toWarehouseId(),
+                request.quantity(),
+                request.unitCost(),
+                request.reason(),
+                request.notes(),
+                request.performedBy());
+
+        return ResponseEntity.ok(new ActionResponse("Stock transferred successfully"));
     }
 
     private InventoryStockDto toDto(InventoryStock stock) {

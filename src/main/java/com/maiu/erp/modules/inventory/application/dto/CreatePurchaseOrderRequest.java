@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotNull;
 public record CreatePurchaseOrderRequest(
         @NotNull(message = "supplierId is required")
         UUID supplierId,
+        UUID projectId,
         @NotNull(message = "orderDate is required")
         LocalDate orderDate,
         LocalDate expectedDate,

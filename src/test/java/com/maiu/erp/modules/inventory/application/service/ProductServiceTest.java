@@ -15,11 +15,15 @@ import org.junit.jupiter.api.Test;
 
 import com.maiu.erp.modules.inventory.application.command.CreateProductCommand;
 import com.maiu.erp.modules.inventory.domain.model.Category;
+import com.maiu.erp.modules.inventory.domain.model.InventoryStock;
 import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.model.Unit;
 import com.maiu.erp.modules.inventory.domain.repository.CategoryRepository;
+import com.maiu.erp.modules.inventory.domain.repository.InventoryStockRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.UnitRepository;
+import com.maiu.erp.shared.exception.BadRequestException;
+import com.maiu.erp.shared.exception.NotFoundException;
 
 class ProductServiceTest {
 
@@ -28,6 +32,7 @@ class ProductServiceTest {
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
         InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
         UUID categoryId = UUID.randomUUID();
         UUID unitId = UUID.randomUUID();
         categoryRepository.save(category(categoryId, "Spare Parts"));
@@ -36,7 +41,8 @@ class ProductServiceTest {
         ProductService productService = new ProductService(
                 productRepository,
                 categoryRepository,
-                unitRepository);
+                unitRepository,
+                inventoryStockRepository);
 
         UUID productId = productService.createProduct(
                 new CreateProductCommand(
@@ -60,14 +66,16 @@ class ProductServiceTest {
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
         InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
 
         ProductService productService = new ProductService(
                 productRepository,
                 categoryRepository,
-                unitRepository);
+                unitRepository,
+                inventoryStockRepository);
 
-        RuntimeException exception = assertThrows(
-                RuntimeException.class,
+        NotFoundException exception = assertThrows(
+                NotFoundException.class,
                 () -> productService.createProduct(
                         new CreateProductCommand(
                                 "SKU-001",
@@ -86,14 +94,16 @@ class ProductServiceTest {
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
         InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
         InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
 
         ProductService productService = new ProductService(
                 productRepository,
                 categoryRepository,
-                unitRepository);
+                unitRepository,
+                inventoryStockRepository);
 
-        RuntimeException exception = assertThrows(
-                RuntimeException.class,
+        NotFoundException exception = assertThrows(
+                NotFoundException.class,
                 () -> productService.createProduct(
                         new CreateProductCommand(
                                 "SKU-001",
@@ -105,6 +115,117 @@ class ProductServiceTest {
                                 UUID.randomUUID())));
 
         assertEquals("Unit not found", exception.getMessage());
+    }
+
+    @Test
+    void updateProductChangesPersistedFields() {
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
+        InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        UUID categoryId = UUID.randomUUID();
+        UUID unitId = UUID.randomUUID();
+        categoryRepository.save(category(categoryId, "Spare Parts"));
+        unitRepository.save(unit(unitId, "Piece", "pc"));
+
+        ProductService productService = new ProductService(
+                productRepository,
+                categoryRepository,
+                unitRepository,
+                inventoryStockRepository);
+
+        UUID productId = productService.createProduct(
+                new CreateProductCommand(
+                        "SKU-001",
+                        "Brake Pad",
+                        "Front brake pad",
+                        new BigDecimal("100.00"),
+                        new BigDecimal("150.00"),
+                        categoryId,
+                        unitId));
+
+        Product updatedProduct = new Product();
+        updatedProduct.setSku("SKU-002");
+        updatedProduct.setName("Brake Pad Deluxe");
+        updatedProduct.setDescription("Updated");
+        updatedProduct.setCostPrice(new BigDecimal("125.00"));
+        updatedProduct.setSellingPrice(new BigDecimal("190.00"));
+        updatedProduct.setCategoryId(categoryId);
+        updatedProduct.setUnitId(unitId);
+        updatedProduct.setActive(true);
+
+        productService.updateProduct(productId, updatedProduct);
+
+        Product product = productRepository.findById(productId).orElseThrow();
+        assertEquals("SKU-002", product.getSku());
+        assertEquals("Brake Pad Deluxe", product.getName());
+        assertEquals(new BigDecimal("190.00"), product.getSellingPrice());
+    }
+
+    @Test
+    void deactivateProductMarksProductInactive() {
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
+        InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+
+        ProductService productService = new ProductService(
+                productRepository,
+                categoryRepository,
+                unitRepository,
+                inventoryStockRepository);
+
+        UUID productId = productService.createProduct(
+                new CreateProductCommand(
+                        "SKU-001",
+                        "Brake Pad",
+                        "Front brake pad",
+                        new BigDecimal("100.00"),
+                        new BigDecimal("150.00"),
+                        null,
+                        null));
+
+        productService.deactivateProduct(productId);
+
+        Product product = productRepository.findById(productId).orElseThrow();
+        assertEquals(false, product.getActive());
+    }
+
+    @Test
+    void deactivateProductFailsWhenStockExists() {
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
+        InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+
+        ProductService productService = new ProductService(
+                productRepository,
+                categoryRepository,
+                unitRepository,
+                inventoryStockRepository);
+
+        UUID productId = productService.createProduct(
+                new CreateProductCommand(
+                        "SKU-001",
+                        "Brake Pad",
+                        "Front brake pad",
+                        new BigDecimal("100.00"),
+                        new BigDecimal("150.00"),
+                        null,
+                        null));
+
+        InventoryStock stock = new InventoryStock();
+        stock.setProductId(productId);
+        stock.setWarehouseId(UUID.randomUUID());
+        stock.setQuantityOnHand(new BigDecimal("5.00"));
+        stock.setReservedQuantity(BigDecimal.ZERO);
+        inventoryStockRepository.save(stock);
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> productService.deactivateProduct(productId));
+
+        assertEquals("Product cannot be deactivated while stock exists", exception.getMessage());
     }
 
     private static Category category(UUID id, String name) {
@@ -152,6 +273,20 @@ class ProductServiceTest {
         @Override
         public List<Product> findAll() {
             return products.values().stream().toList();
+        }
+
+        @Override
+        public List<Product> findByCategoryId(UUID categoryId) {
+            return products.values().stream()
+                    .filter(product -> categoryId.equals(product.getCategoryId()))
+                    .toList();
+        }
+
+        @Override
+        public List<Product> findByUnitId(UUID unitId) {
+            return products.values().stream()
+                    .filter(product -> unitId.equals(product.getUnitId()))
+                    .toList();
         }
 
         @Override
@@ -245,6 +380,42 @@ class ProductServiceTest {
         public List<Unit> findActiveUnits() {
             return units.values().stream()
                     .filter(Unit::isActive)
+                    .toList();
+        }
+    }
+
+    private static final class InMemoryInventoryStockRepository
+            implements InventoryStockRepository {
+        private final Map<UUID, InventoryStock> stocks = new HashMap<>();
+
+        @Override
+        public InventoryStock save(InventoryStock stock) {
+            if (stock.getId() == null) {
+                stock.setId(UUID.randomUUID());
+            }
+            stocks.put(stock.getId(), stock);
+            return stock;
+        }
+
+        @Override
+        public Optional<InventoryStock> findByProductIdAndWarehouseId(UUID productId, UUID warehouseId) {
+            return stocks.values().stream()
+                    .filter(stock -> productId.equals(stock.getProductId()))
+                    .filter(stock -> warehouseId.equals(stock.getWarehouseId()))
+                    .findFirst();
+        }
+
+        @Override
+        public List<InventoryStock> findByProductId(UUID productId) {
+            return stocks.values().stream()
+                    .filter(stock -> productId.equals(stock.getProductId()))
+                    .toList();
+        }
+
+        @Override
+        public List<InventoryStock> findByWarehouseId(UUID warehouseId) {
+            return stocks.values().stream()
+                    .filter(stock -> warehouseId.equals(stock.getWarehouseId()))
                     .toList();
         }
     }

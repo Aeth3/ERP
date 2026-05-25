@@ -12,6 +12,7 @@ public class PurchaseOrderDto {
     private final UUID id;
     private final String poNumber;
     private final UUID supplierId;
+    private final UUID projectId;
     private final PurchaseOrderStatus status;
     private final LocalDate orderDate;
     private final LocalDate expectedDate;
@@ -23,6 +24,7 @@ public class PurchaseOrderDto {
             UUID id,
             String poNumber,
             UUID supplierId,
+            UUID projectId,
             PurchaseOrderStatus status,
             LocalDate orderDate,
             LocalDate expectedDate,
@@ -32,6 +34,7 @@ public class PurchaseOrderDto {
         this.id = id;
         this.poNumber = poNumber;
         this.supplierId = supplierId;
+        this.projectId = projectId;
         this.status = status;
         this.orderDate = orderDate;
         this.expectedDate = expectedDate;
@@ -50,6 +53,10 @@ public class PurchaseOrderDto {
 
     public UUID getSupplierId() {
         return supplierId;
+    }
+
+    public UUID getProjectId() {
+        return projectId;
     }
 
     public PurchaseOrderStatus getStatus() {

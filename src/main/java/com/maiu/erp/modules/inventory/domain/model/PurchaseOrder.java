@@ -11,6 +11,7 @@ public class PurchaseOrder {
     private UUID id;
     private String poNumber;
     private UUID supplierId;
+    private UUID projectId;
     private PurchaseOrderStatus status;
     private LocalDate orderDate;
     private LocalDate expectedDate;
@@ -23,6 +24,10 @@ public class PurchaseOrder {
 
     public void setStatus(PurchaseOrderStatus status) {
         this.status = status;
+    }
+
+    public void setProjectId(UUID projectId) {
+        this.projectId = projectId;
     }
 
     public void setId(UUID id) {
@@ -64,6 +69,10 @@ public class PurchaseOrder {
 
     public UUID getSupplierId() {
         return supplierId;
+    }
+
+    public UUID getProjectId() {
+        return projectId;
     }
 
     public LocalDate getOrderDate() {

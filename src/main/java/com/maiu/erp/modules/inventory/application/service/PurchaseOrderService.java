@@ -16,6 +16,9 @@ import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseOrderRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SupplierRepository;
+import com.maiu.erp.modules.project.domain.repository.ProjectRepository;
+import com.maiu.erp.shared.exception.BadRequestException;
+import com.maiu.erp.shared.exception.NotFoundException;
 
 import jakarta.transaction.Transactional;
 
@@ -27,19 +30,22 @@ public class PurchaseOrderService {
     private final InventoryService inventoryService;
     private final ProductRepository productRepository;
     private final SupplierRepository supplierRepository;
+    private final ProjectRepository projectRepository;
 
     public PurchaseOrderService(
             PurchaseOrderRepository purchaseOrderRepository,
             PurchaseOrderItemRepository itemRepository,
             InventoryService inventoryService,
             ProductRepository productRepository,
-            SupplierRepository supplierRepository) {
+            SupplierRepository supplierRepository,
+            ProjectRepository projectRepository) {
 
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.itemRepository = itemRepository;
         this.inventoryService = inventoryService;
         this.productRepository = productRepository;
         this.supplierRepository = supplierRepository;
+        this.projectRepository = projectRepository;
     }
 
     public List<PurchaseOrder> getPurchaseOrders() {
@@ -49,7 +55,7 @@ public class PurchaseOrderService {
     public PurchaseOrder getPurchaseOrderById(
             UUID purchaseOrderId) {
         return purchaseOrderRepository.findById(purchaseOrderId)
-                .orElseThrow(() -> new RuntimeException("PO not found"));
+                .orElseThrow(() -> new NotFoundException("PO not found"));
     }
 
     public List<PurchaseOrderItem> getPurchaseOrderItems(
@@ -61,20 +67,22 @@ public class PurchaseOrderService {
     public UUID createPurchaseOrder(
             CreatePurchaseOrderRequest request) {
         if (request.items() == null || request.items().isEmpty()) {
-            throw new RuntimeException("Purchase order must have at least one item");
+            throw new BadRequestException("Purchase order must have at least one item");
         }
         if (request.supplierId() == null) {
-            throw new RuntimeException("Supplier ID is required");
+            throw new BadRequestException("Supplier ID is required");
         }
         if (request.orderDate() == null) {
-            throw new RuntimeException("Order date is required");
+            throw new BadRequestException("Order date is required");
         }
         supplierRepository.findById(request.supplierId())
-                .orElseThrow(() -> new RuntimeException("Supplier not found"));
+                .orElseThrow(() -> new NotFoundException("Supplier not found"));
+        validateProjectId(request.projectId());
 
         PurchaseOrder purchaseOrder = new PurchaseOrder();
         purchaseOrder.setPoNumber(generatePoNumber());
         purchaseOrder.setSupplierId(request.supplierId());
+        purchaseOrder.setProjectId(request.projectId());
         purchaseOrder.setStatus(PurchaseOrderStatus.DRAFT);
         purchaseOrder.setOrderDate(request.orderDate());
         purchaseOrder.setExpectedDate(request.expectedDate());
@@ -102,14 +110,14 @@ public class PurchaseOrderService {
     public void approvePurchaseOrder(
             UUID purchaseOrderId) {
         PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(purchaseOrderId)
-                .orElseThrow(() -> new RuntimeException("PO not found"));
+                .orElseThrow(() -> new NotFoundException("PO not found"));
 
         if (purchaseOrder.getStatus() != PurchaseOrderStatus.DRAFT) {
-            throw new RuntimeException("Only draft purchase orders can be approved");
+            throw new BadRequestException("Only draft purchase orders can be approved");
         }
 
         if (itemRepository.findByPurchaseOrderId(purchaseOrderId).isEmpty()) {
-            throw new RuntimeException("Purchase order has no items");
+            throw new BadRequestException("Purchase order has no items");
         }
 
         purchaseOrder.setStatus(PurchaseOrderStatus.APPROVED);
@@ -120,21 +128,20 @@ public class PurchaseOrderService {
     public void receivePurchaseOrder(
             UUID purchaseOrderId,
             UUID warehouseId,
-            Long performedBy) {
+            String performedBy) {
 
         PurchaseOrder po = purchaseOrderRepository
                 .findById(purchaseOrderId)
-                .orElseThrow(() -> new RuntimeException("PO not found"));
+                .orElseThrow(() -> new NotFoundException("PO not found"));
 
         if (po.getStatus() != PurchaseOrderStatus.APPROVED) {
-            throw new RuntimeException("PO must be approved");
+            throw new BadRequestException("PO must be approved");
         }
 
         List<PurchaseOrderItem> items =
                 itemRepository.findByPurchaseOrderId(purchaseOrderId);
 
         for (PurchaseOrderItem item : items) {
-
             inventoryService.increaseStock(
                     item.getProductId(),
                     warehouseId,
@@ -146,8 +153,25 @@ public class PurchaseOrderService {
         }
 
         po.setStatus(PurchaseOrderStatus.RECEIVED);
-
         purchaseOrderRepository.save(po);
+    }
+
+    @Transactional
+    public void cancelPurchaseOrder(
+            UUID purchaseOrderId) {
+        PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(purchaseOrderId)
+                .orElseThrow(() -> new NotFoundException("PO not found"));
+
+        if (purchaseOrder.getStatus() == PurchaseOrderStatus.RECEIVED) {
+            throw new BadRequestException("Received purchase orders cannot be cancelled");
+        }
+
+        if (purchaseOrder.getStatus() == PurchaseOrderStatus.CANCELLED) {
+            throw new BadRequestException("Purchase order is already cancelled");
+        }
+
+        purchaseOrder.setStatus(PurchaseOrderStatus.CANCELLED);
+        purchaseOrderRepository.save(purchaseOrder);
     }
 
     private BigDecimal calculateTotalAmount(
@@ -161,19 +185,28 @@ public class PurchaseOrderService {
     private void validatePurchaseOrderItem(
             CreatePurchaseOrderItemRequest itemRequest) {
         if (itemRequest.productId() == null) {
-            throw new RuntimeException("Product ID is required");
+            throw new BadRequestException("Product ID is required");
         }
         if (itemRequest.quantity() == null
                 || itemRequest.quantity().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Item quantity must be greater than zero");
+            throw new BadRequestException("Item quantity must be greater than zero");
         }
         if (itemRequest.unitCost() == null
                 || itemRequest.unitCost().compareTo(BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("Item unit cost must be zero or greater");
+            throw new BadRequestException("Item unit cost must be zero or greater");
         }
 
         productRepository.findById(itemRequest.productId())
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new NotFoundException("Product not found"));
+    }
+
+    private void validateProjectId(UUID projectId) {
+        if (projectId == null) {
+            return;
+        }
+
+        projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found"));
     }
 
     private String generatePoNumber() {

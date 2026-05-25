@@ -7,6 +7,9 @@ import org.springframework.stereotype.Service;
 
 import com.maiu.erp.modules.inventory.domain.model.Unit;
 import com.maiu.erp.modules.inventory.domain.repository.UnitRepository;
+import com.maiu.erp.shared.exception.BadRequestException;
+import com.maiu.erp.shared.exception.ConflictException;
+import com.maiu.erp.shared.exception.NotFoundException;
 
 @Service
 public class UnitService {
@@ -19,12 +22,12 @@ public class UnitService {
 
     public UUID createUnit(Unit unit) {
         if (unit.getName() == null || unit.getName().isBlank()) {
-            throw new RuntimeException("Unit name is required");
+            throw new BadRequestException("Unit name is required");
         }
 
         unitRepository.findByName(unit.getName().trim())
                 .ifPresent(existing -> {
-                    throw new RuntimeException("Unit name already exists");
+                    throw new ConflictException("Unit name already exists");
                 });
 
         unit.setName(unit.getName().trim());
@@ -45,6 +48,6 @@ public class UnitService {
 
     public Unit getUnitById(UUID unitId) {
         return unitRepository.findById(unitId)
-                .orElseThrow(() -> new RuntimeException("Unit not found"));
+                .orElseThrow(() -> new NotFoundException("Unit not found"));
     }
 }

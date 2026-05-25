@@ -74,6 +74,14 @@ public class PurchaseOrderRepositoryImpl
                 .toList();
     }
 
+    @Override
+    public List<PurchaseOrder> findByProjectId(UUID projectId) {
+        return jpaRepository.findByProjectId(projectId)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
     private PurchaseOrder toDomain(
             PurchaseOrderEntity entity) {
 
@@ -86,6 +94,9 @@ public class PurchaseOrderRepositoryImpl
 
         po.setSupplierId(
                 entity.getSupplierId());
+
+        po.setProjectId(
+                entity.getProjectId());
 
         po.setStatus(
                 entity.getStatus());
@@ -119,6 +130,9 @@ public class PurchaseOrderRepositoryImpl
 
         entity.setSupplierId(
                 purchaseOrder.getSupplierId());
+
+        entity.setProjectId(
+                purchaseOrder.getProjectId());
 
         entity.setStatus(
                 purchaseOrder.getStatus());

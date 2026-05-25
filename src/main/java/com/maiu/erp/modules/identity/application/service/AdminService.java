@@ -57,6 +57,7 @@ public class AdminService {
         return new UserDto(
                 updatedUser.getId(),
                 updatedUser.getName(),
-                updatedUser.getEmail());
+                updatedUser.getEmail(),
+                updatedUser.isEmailVerified());
     }
 }

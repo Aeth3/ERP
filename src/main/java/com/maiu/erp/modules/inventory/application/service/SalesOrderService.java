@@ -1,6 +1,7 @@
 package com.maiu.erp.modules.inventory.application.service;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -14,8 +15,10 @@ import com.maiu.erp.modules.inventory.domain.repository.CustomerRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderRepository;
+import com.maiu.erp.shared.exception.BadRequestException;
+import com.maiu.erp.shared.exception.NotFoundException;
+
 import jakarta.transaction.Transactional;
-import java.util.List;
 
 @Service
 public class SalesOrderService {
@@ -48,7 +51,7 @@ public class SalesOrderService {
     public SalesOrder getSalesOrderById(
             UUID salesOrderId) {
         return salesOrderRepository.findById(salesOrderId)
-                .orElseThrow(() -> new RuntimeException("Sales Order not found"));
+                .orElseThrow(() -> new NotFoundException("Sales Order not found"));
     }
 
     public List<SalesOrderItem> getSalesOrderItems(
@@ -60,16 +63,16 @@ public class SalesOrderService {
     public UUID createSalesOrder(
             CreateSalesOrderRequest request) {
         if (request.items() == null || request.items().isEmpty()) {
-            throw new RuntimeException("Sales order must have at least one item");
+            throw new BadRequestException("Sales order must have at least one item");
         }
         if (request.customerId() == null) {
-            throw new RuntimeException("Customer ID is required");
+            throw new BadRequestException("Customer ID is required");
         }
         if (request.orderDate() == null) {
-            throw new RuntimeException("Order date is required");
+            throw new BadRequestException("Order date is required");
         }
         customerRepository.findById(request.customerId())
-                .orElseThrow(() -> new RuntimeException("Customer not found"));
+                .orElseThrow(() -> new NotFoundException("Customer not found"));
 
         SalesOrder salesOrder = new SalesOrder();
         salesOrder.setSoNumber(generateSoNumber());
@@ -102,17 +105,17 @@ public class SalesOrderService {
         inventoryValidationService.validateWarehouseExists(warehouseId);
 
         SalesOrder salesOrder = salesOrderRepository.findById(salesOrderId)
-                .orElseThrow(() -> new RuntimeException("Sales Order not found"));
+                .orElseThrow(() -> new NotFoundException("Sales Order not found"));
 
         if (salesOrder.getStatus() != SalesOrderStatus.DRAFT) {
-            throw new RuntimeException("Only draft sales orders can be confirmed");
+            throw new BadRequestException("Only draft sales orders can be confirmed");
         }
 
         List<SalesOrderItem> items = salesOrderItemRepository
                 .findBySalesOrderId(salesOrderId);
 
         if (items.isEmpty()) {
-            throw new RuntimeException("Sales Order has no items");
+            throw new BadRequestException("Sales Order has no items");
         }
 
         for (SalesOrderItem item : items) {
@@ -136,13 +139,13 @@ public class SalesOrderService {
     public void shipSalesOrder(
             UUID salesOrderId,
             UUID warehouseId,
-            Long performedBy) {
+            String performedBy) {
         inventoryValidationService.validateWarehouseExists(warehouseId);
         SalesOrder salesOrder = salesOrderRepository.findById(salesOrderId)
-                .orElseThrow(() -> new RuntimeException("Sales Order not found"));
+                .orElseThrow(() -> new NotFoundException("Sales Order not found"));
 
         if (salesOrder.getStatus() != SalesOrderStatus.CONFIRMED) {
-            throw new RuntimeException("Sales Order must be confirmed");
+            throw new BadRequestException("Sales Order must be confirmed");
         }
         List<SalesOrderItem> items = salesOrderItemRepository.findBySalesOrderId(salesOrder.getId());
         for (SalesOrderItem item : items) {
@@ -157,9 +160,40 @@ public class SalesOrderService {
         }
         salesOrder.setStatus(SalesOrderStatus.SHIPPED);
         salesOrderRepository.save(salesOrder);
-        // reduce inventory
-        // create stock movement
-        // mark shipped
+    }
+
+    @Transactional
+    public void cancelSalesOrder(
+            UUID salesOrderId,
+            UUID warehouseId) {
+        SalesOrder salesOrder = salesOrderRepository.findById(salesOrderId)
+                .orElseThrow(() -> new NotFoundException("Sales Order not found"));
+
+        if (salesOrder.getStatus() == SalesOrderStatus.SHIPPED
+                || salesOrder.getStatus() == SalesOrderStatus.DELIVERED) {
+            throw new BadRequestException("Shipped or delivered sales orders cannot be cancelled");
+        }
+
+        if (salesOrder.getStatus() == SalesOrderStatus.CANCELLED) {
+            throw new BadRequestException("Sales Order is already cancelled");
+        }
+
+        if (salesOrder.getStatus() == SalesOrderStatus.CONFIRMED) {
+            inventoryValidationService.validateWarehouseExists(warehouseId);
+
+            List<SalesOrderItem> items = salesOrderItemRepository
+                    .findBySalesOrderId(salesOrderId);
+
+            for (SalesOrderItem item : items) {
+                inventoryService.releaseReservedStock(
+                        item.getProductId(),
+                        warehouseId,
+                        item.getQuantity());
+            }
+        }
+
+        salesOrder.setStatus(SalesOrderStatus.CANCELLED);
+        salesOrderRepository.save(salesOrder);
     }
 
     private BigDecimal calculateTotalAmount(
@@ -173,19 +207,19 @@ public class SalesOrderService {
     private void validateSalesOrderItem(
             CreateSalesOrderItemRequest itemRequest) {
         if (itemRequest.productId() == null) {
-            throw new RuntimeException("Product ID is required");
+            throw new BadRequestException("Product ID is required");
         }
         if (itemRequest.quantity() == null
                 || itemRequest.quantity().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Item quantity must be greater than zero");
+            throw new BadRequestException("Item quantity must be greater than zero");
         }
         if (itemRequest.unitPrice() == null
                 || itemRequest.unitPrice().compareTo(BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("Item unit price must be zero or greater");
+            throw new BadRequestException("Item unit price must be zero or greater");
         }
 
         productRepository.findById(itemRequest.productId())
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new NotFoundException("Product not found"));
     }
 
     private String generateSoNumber() {

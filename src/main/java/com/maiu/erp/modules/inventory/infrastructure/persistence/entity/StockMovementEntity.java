@@ -22,6 +22,8 @@ public class StockMovementEntity {
     @Column(nullable = false)
     private UUID warehouseId;
 
+    private UUID projectId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private MovementType movementType;
@@ -37,7 +39,7 @@ public class StockMovementEntity {
 
     private String remarks;
 
-    private Long performedBy;
+    private String performedBy;
 
     private Instant movementDate;
 
@@ -68,6 +70,14 @@ public class StockMovementEntity {
 
     public void setWarehouseId(UUID warehouseId) {
         this.warehouseId = warehouseId;
+    }
+
+    public UUID getProjectId() {
+        return projectId;
+    }
+
+    public void setProjectId(UUID projectId) {
+        this.projectId = projectId;
     }
 
     public MovementType getMovementType() {
@@ -110,11 +120,11 @@ public class StockMovementEntity {
         this.referenceId = referenceId;
     }
 
-    public Long getPerformedBy() {
+    public String getPerformedBy() {
         return performedBy;
     }
 
-    public void setPerformedBy(Long performedBy) {
+    public void setPerformedBy(String performedBy) {
         this.performedBy = performedBy;
     }
 

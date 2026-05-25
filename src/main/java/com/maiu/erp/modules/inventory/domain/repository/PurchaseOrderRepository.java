@@ -14,4 +14,6 @@ public interface PurchaseOrderRepository {
     List<PurchaseOrder> findAll();
 
     List<PurchaseOrder> findBySupplierId(UUID supplierId);
+
+    List<PurchaseOrder> findByProjectId(UUID projectId);
 }

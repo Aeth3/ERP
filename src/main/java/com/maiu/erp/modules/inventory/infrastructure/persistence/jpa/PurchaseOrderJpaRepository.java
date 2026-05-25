@@ -16,4 +16,7 @@ public interface PurchaseOrderJpaRepository
 
     List<PurchaseOrderEntity>
     findBySupplierId(UUID supplierId);
+
+    List<PurchaseOrderEntity>
+    findByProjectId(UUID projectId);
 }

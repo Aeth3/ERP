@@ -10,6 +10,8 @@ public interface StockMovementRepository {
 
     StockMovement save(StockMovement movement);
 
+    List<StockMovement> findAll();
+
     List<StockMovement> findByProductId(UUID productId);
 
     List<StockMovement> findByWarehouseId(UUID warehouseId);

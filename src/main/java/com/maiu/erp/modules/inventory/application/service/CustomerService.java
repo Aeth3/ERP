@@ -7,6 +7,9 @@ import org.springframework.stereotype.Service;
 
 import com.maiu.erp.modules.inventory.domain.model.Customer;
 import com.maiu.erp.modules.inventory.domain.repository.CustomerRepository;
+import com.maiu.erp.shared.exception.BadRequestException;
+import com.maiu.erp.shared.exception.ConflictException;
+import com.maiu.erp.shared.exception.NotFoundException;
 
 @Service
 public class CustomerService {
@@ -19,13 +22,13 @@ public class CustomerService {
 
     public UUID createCustomer(Customer customer) {
         if (customer.getCode() == null || customer.getCode().isBlank()) {
-            throw new RuntimeException("Customer code is required");
+            throw new BadRequestException("Customer code is required");
         }
         if (customer.getName() == null || customer.getName().isBlank()) {
-            throw new RuntimeException("Customer name is required");
+            throw new BadRequestException("Customer name is required");
         }
         if (customerRepository.findByCode(customer.getCode().trim()).isPresent()) {
-            throw new RuntimeException("Customer code already exists");
+            throw new ConflictException("Customer code already exists");
         }
         if (customer.getActive() == null) {
             customer.setActive(true);
@@ -50,7 +53,7 @@ public class CustomerService {
 
     public Customer getCustomerById(UUID customerId) {
         return customerRepository.findById(customerId)
-                .orElseThrow(() -> new RuntimeException("Customer not found"));
+                .orElseThrow(() -> new NotFoundException("Customer not found"));
     }
 
     private String trimToNull(String value) {

@@ -21,6 +21,8 @@ public class PurchaseOrderEntity {
 
     private UUID supplierId;
 
+    private UUID projectId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PurchaseOrderStatus status;
@@ -59,6 +61,14 @@ public class PurchaseOrderEntity {
 
     public void setSupplierId(UUID supplierId) {
         this.supplierId = supplierId;
+    }
+
+    public UUID getProjectId() {
+        return projectId;
+    }
+
+    public void setProjectId(UUID projectId) {
+        this.projectId = projectId;
     }
 
     public PurchaseOrderStatus getStatus() {

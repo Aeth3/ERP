@@ -10,6 +10,8 @@ import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.repository.InventoryStockRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.WarehouseRepository;
+import com.maiu.erp.shared.exception.BadRequestException;
+import com.maiu.erp.shared.exception.NotFoundException;
 
 @Service
 public class InventoryValidationService {
@@ -33,37 +35,37 @@ public class InventoryValidationService {
         validateWarehouseExists(warehouseId);
         if (requiredQuantity == null
                 || requiredQuantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Required quantity must be greater than zero");
+            throw new BadRequestException("Required quantity must be greater than zero");
         }
 
         InventoryStock stock = inventoryStockRepository
                 .findByProductIdAndWarehouseId(productId, warehouseId)
-                .orElseThrow(() -> new RuntimeException("Stock not found"));
+                .orElseThrow(() -> new NotFoundException("Stock not found"));
 
         BigDecimal availableQuantity = stock.getQuantityOnHand()
                 .subtract(stock.getReservedQuantity());
 
         if (availableQuantity.compareTo(requiredQuantity) < 0) {
-            throw new RuntimeException("Insufficient available stock");
+            throw new BadRequestException("Insufficient available stock");
         }
     }
 
     public void validateWarehouseExists(
             UUID warehouseId) {
         if (warehouseId == null) {
-            throw new IllegalArgumentException("Warehouse ID is required");
+            throw new BadRequestException("Warehouse ID is required");
         }
         warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new RuntimeException("Warehouse not found"));
+                .orElseThrow(() -> new NotFoundException("Warehouse not found"));
     }
 
     public void validateProductActive(
             UUID productId) {
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new NotFoundException("Product not found"));
 
         if (!Boolean.TRUE.equals(product.getActive())) {
-            throw new RuntimeException("Product is inactive");
+            throw new BadRequestException("Product is inactive");
         }
     }
 }
