@@ -16,6 +16,8 @@ public interface StockMovementRepository {
 
     List<StockMovement> findByWarehouseId(UUID warehouseId);
 
+    List<StockMovement> findByProjectId(UUID projectId);
+
     List<StockMovement> findByReferenceId(UUID referenceId);
 
     List<StockMovement> findBetweenDates(

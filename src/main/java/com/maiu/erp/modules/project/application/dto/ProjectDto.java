@@ -1,5 +1,6 @@
 package com.maiu.erp.modules.project.application.dto;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -14,6 +15,7 @@ public class ProjectDto {
     private final String location;
     private final LocalDate startDate;
     private final LocalDate targetEndDate;
+    private final BigDecimal budgetAmount;
     private final ProjectStatus status;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -26,6 +28,7 @@ public class ProjectDto {
             String location,
             LocalDate startDate,
             LocalDate targetEndDate,
+            BigDecimal budgetAmount,
             ProjectStatus status,
             Instant createdAt,
             Instant updatedAt) {
@@ -36,6 +39,7 @@ public class ProjectDto {
         this.location = location;
         this.startDate = startDate;
         this.targetEndDate = targetEndDate;
+        this.budgetAmount = budgetAmount;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -67,6 +71,10 @@ public class ProjectDto {
 
     public LocalDate getTargetEndDate() {
         return targetEndDate;
+    }
+
+    public BigDecimal getBudgetAmount() {
+        return budgetAmount;
     }
 
     public ProjectStatus getStatus() {

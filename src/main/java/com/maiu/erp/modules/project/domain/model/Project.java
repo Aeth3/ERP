@@ -1,5 +1,6 @@
 package com.maiu.erp.modules.project.domain.model;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -14,6 +15,7 @@ public class Project {
     private String location;
     private LocalDate startDate;
     private LocalDate targetEndDate;
+    private BigDecimal budgetAmount;
     private ProjectStatus status;
     private Instant createdAt;
     private Instant updatedAt;
@@ -72,6 +74,14 @@ public class Project {
 
     public void setTargetEndDate(LocalDate targetEndDate) {
         this.targetEndDate = targetEndDate;
+    }
+
+    public BigDecimal getBudgetAmount() {
+        return budgetAmount;
+    }
+
+    public void setBudgetAmount(BigDecimal budgetAmount) {
+        this.budgetAmount = budgetAmount;
     }
 
     public ProjectStatus getStatus() {

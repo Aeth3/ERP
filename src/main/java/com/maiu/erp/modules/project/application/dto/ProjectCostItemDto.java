@@ -8,16 +8,28 @@ public class ProjectCostItemDto {
     private final String productName;
     private final BigDecimal issuedQuantity;
     private final BigDecimal issuedCost;
+    private final BigDecimal returnedQuantity;
+    private final BigDecimal returnedCost;
+    private final BigDecimal netIssuedQuantity;
+    private final BigDecimal netIssuedCost;
 
     public ProjectCostItemDto(
             UUID productId,
             String productName,
             BigDecimal issuedQuantity,
-            BigDecimal issuedCost) {
+            BigDecimal issuedCost,
+            BigDecimal returnedQuantity,
+            BigDecimal returnedCost,
+            BigDecimal netIssuedQuantity,
+            BigDecimal netIssuedCost) {
         this.productId = productId;
         this.productName = productName;
         this.issuedQuantity = issuedQuantity;
         this.issuedCost = issuedCost;
+        this.returnedQuantity = returnedQuantity;
+        this.returnedCost = returnedCost;
+        this.netIssuedQuantity = netIssuedQuantity;
+        this.netIssuedCost = netIssuedCost;
     }
 
     public UUID getProductId() {
@@ -34,5 +46,21 @@ public class ProjectCostItemDto {
 
     public BigDecimal getIssuedCost() {
         return issuedCost;
+    }
+
+    public BigDecimal getReturnedQuantity() {
+        return returnedQuantity;
+    }
+
+    public BigDecimal getReturnedCost() {
+        return returnedCost;
+    }
+
+    public BigDecimal getNetIssuedQuantity() {
+        return netIssuedQuantity;
+    }
+
+    public BigDecimal getNetIssuedCost() {
+        return netIssuedCost;
     }
 }

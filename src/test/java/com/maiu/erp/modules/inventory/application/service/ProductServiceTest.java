@@ -2,6 +2,7 @@ package com.maiu.erp.modules.inventory.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
@@ -226,6 +227,35 @@ class ProductServiceTest {
                 () -> productService.deactivateProduct(productId));
 
         assertEquals("Product cannot be deactivated while stock exists", exception.getMessage());
+    }
+
+    @Test
+    void activateProductMarksProductActive() {
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
+        InMemoryUnitRepository unitRepository = new InMemoryUnitRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+
+        ProductService productService = new ProductService(
+                productRepository,
+                categoryRepository,
+                unitRepository,
+                inventoryStockRepository);
+
+        UUID productId = productService.createProduct(
+                new CreateProductCommand(
+                        "SKU-001",
+                        "Brake Pad",
+                        "Front brake pad",
+                        new BigDecimal("100.00"),
+                        new BigDecimal("150.00"),
+                        null,
+                        null));
+
+        productService.deactivateProduct(productId);
+        productService.activateProduct(productId);
+
+        assertTrue(productRepository.findById(productId).orElseThrow().getActive());
     }
 
     private static Category category(UUID id, String name) {

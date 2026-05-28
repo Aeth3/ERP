@@ -103,6 +103,14 @@ public class ProductService {
         productRepository.save(product);
     }
 
+    public void activateProduct(
+            UUID productId) {
+        Product product = getProductById(productId);
+        product.setActive(true);
+        product.setUpdatedAt(Instant.now());
+        productRepository.save(product);
+    }
+
     public List<Product> getProducts() {
         return productRepository.findAll();
     }

@@ -57,6 +57,13 @@ public class WarehouseController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Void> activateWarehouse(
+            @PathVariable UUID id) {
+        warehouseService.activateWarehouse(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     public ResponseEntity<List<WarehouseDto>> getWarehouses(
             @RequestParam(defaultValue = "false") boolean activeOnly) {

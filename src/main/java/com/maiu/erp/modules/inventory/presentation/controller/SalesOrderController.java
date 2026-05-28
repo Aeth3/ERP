@@ -15,13 +15,18 @@ import com.maiu.erp.modules.inventory.application.dto.ActionResponse;
 import com.maiu.erp.modules.inventory.application.dto.CancelSalesOrderRequest;
 import com.maiu.erp.modules.inventory.application.dto.ConfirmSalesOrderRequest;
 import com.maiu.erp.modules.inventory.application.dto.CreateSalesOrderRequest;
+import com.maiu.erp.modules.inventory.application.dto.CreateSalesReturnRequest;
 import com.maiu.erp.modules.inventory.application.dto.IdResponse;
 import com.maiu.erp.modules.inventory.application.dto.SalesOrderDto;
 import com.maiu.erp.modules.inventory.application.dto.SalesOrderItemDto;
+import com.maiu.erp.modules.inventory.application.dto.SalesReturnDto;
+import com.maiu.erp.modules.inventory.application.dto.SalesReturnItemDto;
 import com.maiu.erp.modules.inventory.application.dto.ShipSalesOrderRequest;
 import com.maiu.erp.modules.inventory.application.service.SalesOrderService;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrder;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrderItem;
+import com.maiu.erp.modules.inventory.domain.model.SalesReturn;
+import com.maiu.erp.modules.inventory.domain.model.SalesReturnItem;
 
 import jakarta.validation.Valid;
 
@@ -93,6 +98,23 @@ public class SalesOrderController {
                 new ActionResponse("Sales order cancelled successfully"));
     }
 
+    @PostMapping("/{id}/returns")
+    public ResponseEntity<IdResponse> createSalesReturn(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateSalesReturnRequest request) {
+        return ResponseEntity.status(201).body(new IdResponse(salesOrderService.createSalesReturn(id, request)));
+    }
+
+    @GetMapping("/returns")
+    public ResponseEntity<List<SalesReturnDto>> getSalesReturns() {
+        return ResponseEntity.ok(salesOrderService.getSalesReturns().stream().map(this::toReturnDto).toList());
+    }
+
+    @GetMapping("/returns/{id}")
+    public ResponseEntity<SalesReturnDto> getSalesReturnById(@PathVariable UUID id) {
+        return ResponseEntity.ok(toReturnDto(salesOrderService.getSalesReturnById(id)));
+    }
+
     private SalesOrderDto toDto(SalesOrder salesOrder) {
         List<SalesOrderItemDto> items = salesOrderService
                 .getSalesOrderItems(salesOrder.getId())
@@ -114,6 +136,29 @@ public class SalesOrderController {
         return new SalesOrderItemDto(
                 item.getId(),
                 item.getSalesOrderId(),
+                item.getProductId(),
+                item.getQuantity(),
+                item.getUnitPrice(),
+                item.getLineTotal());
+    }
+
+    private SalesReturnDto toReturnDto(SalesReturn salesReturn) {
+        return new SalesReturnDto(
+                salesReturn.getId(),
+                salesReturn.getReturnNumber(),
+                salesReturn.getSalesOrderId(),
+                salesReturn.getCustomerId(),
+                salesReturn.getWarehouseId(),
+                salesReturn.getRemarks(),
+                salesReturn.getPerformedBy(),
+                salesReturn.getReturnedAt(),
+                salesOrderService.getSalesReturnItems(salesReturn.getId()).stream().map(this::toReturnItemDto).toList());
+    }
+
+    private SalesReturnItemDto toReturnItemDto(SalesReturnItem item) {
+        return new SalesReturnItemDto(
+                item.getId(),
+                item.getSalesReturnId(),
                 item.getProductId(),
                 item.getQuantity(),
                 item.getUnitPrice(),

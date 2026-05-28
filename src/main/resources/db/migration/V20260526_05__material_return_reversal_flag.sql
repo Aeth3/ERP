@@ -1,0 +1,2 @@
+ALTER TABLE material_returns
+    ADD COLUMN IF NOT EXISTS reversal BOOLEAN NOT NULL DEFAULT FALSE AFTER warehouse_id;

@@ -21,6 +21,8 @@ import com.maiu.erp.modules.inventory.domain.model.InventoryStock;
 import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrder;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrderItem;
+import com.maiu.erp.modules.inventory.domain.model.SalesReturn;
+import com.maiu.erp.modules.inventory.domain.model.SalesReturnItem;
 import com.maiu.erp.modules.inventory.domain.model.StockMovement;
 import com.maiu.erp.modules.inventory.domain.model.Warehouse;
 import com.maiu.erp.modules.inventory.domain.repository.InventoryStockRepository;
@@ -28,6 +30,8 @@ import com.maiu.erp.modules.inventory.domain.repository.CustomerRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderRepository;
+import com.maiu.erp.modules.inventory.domain.repository.SalesReturnItemRepository;
+import com.maiu.erp.modules.inventory.domain.repository.SalesReturnRepository;
 import com.maiu.erp.modules.inventory.domain.repository.StockMovementRepository;
 import com.maiu.erp.modules.inventory.domain.repository.WarehouseRepository;
 
@@ -67,7 +71,9 @@ class SalesOrderServiceTest {
                 inventoryService,
                 validationService,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         salesOrderService.confirmSalesOrder(salesOrderId, warehouseId);
 
@@ -80,6 +86,7 @@ class SalesOrderServiceTest {
         assertEquals(new BigDecimal("10"), updatedStock.getQuantityOnHand());
         assertEquals(new BigDecimal("6"), updatedStock.getReservedQuantity());
         assertEquals(SalesOrderStatus.CONFIRMED, updatedOrder.getStatus());
+        assertEquals(warehouseId, updatedOrder.getConfirmedWarehouseId());
     }
 
     @Test
@@ -116,7 +123,9 @@ class SalesOrderServiceTest {
                 inventoryService,
                 validationService,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -151,7 +160,9 @@ class SalesOrderServiceTest {
         productRepository.save(activeProduct(productId));
         warehouseRepository.save(activeWarehouse(warehouseId));
         inventoryStockRepository.save(stock(productId, warehouseId, "10", "4"));
-        salesOrderRepository.save(salesOrder(salesOrderId, SalesOrderStatus.CONFIRMED));
+        SalesOrder confirmedOrder = salesOrder(salesOrderId, SalesOrderStatus.CONFIRMED);
+        confirmedOrder.setConfirmedWarehouseId(warehouseId);
+        salesOrderRepository.save(confirmedOrder);
         salesOrderItemRepository.save(salesOrderItem(salesOrderId, productId, "4", "15.00"));
 
         InventoryValidationService validationService = new InventoryValidationService(
@@ -168,7 +179,9 @@ class SalesOrderServiceTest {
                 inventoryService,
                 validationService,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         salesOrderService.shipSalesOrder(salesOrderId, warehouseId, performedBy);
 
@@ -186,6 +199,59 @@ class SalesOrderServiceTest {
         assertEquals(new BigDecimal("15.00"), movement.getUnitCost());
         assertEquals(salesOrderId, movement.getReferenceId());
         assertEquals(performedBy, movement.getPerformedBy());
+    }
+
+    @Test
+    void shipSalesOrderFailsWhenWarehouseDoesNotMatchConfirmedWarehouse() {
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
+        InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+
+        UUID productId = UUID.randomUUID();
+        UUID confirmedWarehouseId = UUID.randomUUID();
+        UUID wrongWarehouseId = UUID.randomUUID();
+        UUID salesOrderId = UUID.randomUUID();
+
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(activeWarehouse(confirmedWarehouseId));
+        warehouseRepository.save(activeWarehouse(wrongWarehouseId));
+        inventoryStockRepository.save(stock(productId, confirmedWarehouseId, "10", "4"));
+        SalesOrder confirmedOrder = salesOrder(salesOrderId, SalesOrderStatus.CONFIRMED);
+        confirmedOrder.setConfirmedWarehouseId(confirmedWarehouseId);
+        salesOrderRepository.save(confirmedOrder);
+        salesOrderItemRepository.save(salesOrderItem(salesOrderId, productId, "4", "15.00"));
+
+        InventoryValidationService validationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                validationService);
+        SalesOrderService salesOrderService = new SalesOrderService(
+                salesOrderRepository,
+                salesOrderItemRepository,
+                inventoryService,
+                validationService,
+                productRepository,
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> salesOrderService.shipSalesOrder(salesOrderId, wrongWarehouseId, "Alex Reyes"));
+
+        assertEquals("Sales Order must be shipped from the confirmed warehouse", exception.getMessage());
+        assertEquals(new BigDecimal("10"), inventoryStockRepository
+                .findByProductIdAndWarehouseId(productId, confirmedWarehouseId)
+                .orElseThrow()
+                .getQuantityOnHand());
     }
 
     @Test
@@ -222,7 +288,9 @@ class SalesOrderServiceTest {
                 inventoryService,
                 validationService,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         salesOrderService.cancelSalesOrder(salesOrderId, null);
 
@@ -254,7 +322,9 @@ class SalesOrderServiceTest {
         productRepository.save(activeProduct(productId));
         warehouseRepository.save(activeWarehouse(warehouseId));
         inventoryStockRepository.save(stock(productId, warehouseId, "10", "6"));
-        salesOrderRepository.save(salesOrder(salesOrderId, SalesOrderStatus.CONFIRMED));
+        SalesOrder confirmedOrder = salesOrder(salesOrderId, SalesOrderStatus.CONFIRMED);
+        confirmedOrder.setConfirmedWarehouseId(warehouseId);
+        salesOrderRepository.save(confirmedOrder);
         salesOrderItemRepository.save(salesOrderItem(salesOrderId, productId, "4", "12.50"));
 
         InventoryValidationService validationService = new InventoryValidationService(
@@ -271,7 +341,9 @@ class SalesOrderServiceTest {
                 inventoryService,
                 validationService,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         salesOrderService.cancelSalesOrder(salesOrderId, warehouseId);
 
@@ -284,6 +356,59 @@ class SalesOrderServiceTest {
         assertEquals(new BigDecimal("10"), updatedStock.getQuantityOnHand());
         assertEquals(new BigDecimal("2"), updatedStock.getReservedQuantity());
         assertEquals(SalesOrderStatus.CANCELLED, updatedOrder.getStatus());
+    }
+
+    @Test
+    void cancelConfirmedSalesOrderFailsWhenWarehouseDoesNotMatchConfirmedWarehouse() {
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
+        InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+
+        UUID productId = UUID.randomUUID();
+        UUID confirmedWarehouseId = UUID.randomUUID();
+        UUID wrongWarehouseId = UUID.randomUUID();
+        UUID salesOrderId = UUID.randomUUID();
+
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(activeWarehouse(confirmedWarehouseId));
+        warehouseRepository.save(activeWarehouse(wrongWarehouseId));
+        inventoryStockRepository.save(stock(productId, confirmedWarehouseId, "10", "6"));
+        SalesOrder confirmedOrder = salesOrder(salesOrderId, SalesOrderStatus.CONFIRMED);
+        confirmedOrder.setConfirmedWarehouseId(confirmedWarehouseId);
+        salesOrderRepository.save(confirmedOrder);
+        salesOrderItemRepository.save(salesOrderItem(salesOrderId, productId, "4", "12.50"));
+
+        InventoryValidationService validationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                validationService);
+        SalesOrderService salesOrderService = new SalesOrderService(
+                salesOrderRepository,
+                salesOrderItemRepository,
+                inventoryService,
+                validationService,
+                productRepository,
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> salesOrderService.cancelSalesOrder(salesOrderId, wrongWarehouseId));
+
+        assertEquals("Sales Order must be cancelled from the confirmed warehouse", exception.getMessage());
+        assertEquals(new BigDecimal("6"), inventoryStockRepository
+                .findByProductIdAndWarehouseId(productId, confirmedWarehouseId)
+                .orElseThrow()
+                .getReservedQuantity());
     }
 
     @Test
@@ -320,7 +445,9 @@ class SalesOrderServiceTest {
                 inventoryService,
                 validationService,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -330,6 +457,198 @@ class SalesOrderServiceTest {
         assertEquals(
                 SalesOrderStatus.SHIPPED,
                 salesOrderRepository.findById(salesOrderId).orElseThrow().getStatus());
+    }
+
+    @Test
+    void createSalesReturnRestoresStockAndPersistsReturn() {
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
+        InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemorySalesReturnRepository salesReturnRepository = new InMemorySalesReturnRepository();
+        InMemorySalesReturnItemRepository salesReturnItemRepository = new InMemorySalesReturnItemRepository();
+
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID salesOrderId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(activeWarehouse(warehouseId));
+        customerRepository.save(activeCustomer(customerId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "6", "0"));
+        SalesOrder shippedOrder = salesOrder(salesOrderId, SalesOrderStatus.SHIPPED);
+        shippedOrder.setCustomerId(customerId);
+        shippedOrder.setConfirmedWarehouseId(warehouseId);
+        salesOrderRepository.save(shippedOrder);
+        salesOrderItemRepository.save(salesOrderItem(salesOrderId, productId, "4", "15.00"));
+
+        InventoryValidationService validationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                validationService);
+        SalesOrderService salesOrderService = new SalesOrderService(
+                salesOrderRepository,
+                salesOrderItemRepository,
+                inventoryService,
+                validationService,
+                productRepository,
+                customerRepository,
+                salesReturnRepository,
+                salesReturnItemRepository);
+
+        UUID salesReturnId = salesOrderService.createSalesReturn(
+                salesOrderId,
+                new com.maiu.erp.modules.inventory.application.dto.CreateSalesReturnRequest(
+                        "Customer returned damaged item",
+                        "warehouse lead",
+                        List.of(new com.maiu.erp.modules.inventory.application.dto.CreateSalesReturnItemRequest(
+                                productId,
+                                new BigDecimal("2.00")))));
+
+        SalesReturn salesReturn = salesReturnRepository.findById(salesReturnId).orElseThrow();
+        assertEquals(warehouseId, salesReturn.getWarehouseId());
+        assertEquals(new BigDecimal("8.00"), inventoryStockRepository.findByProductIdAndWarehouseId(productId, warehouseId)
+                .orElseThrow()
+                .getQuantityOnHand());
+        assertEquals(1, salesReturnItemRepository.findBySalesReturnId(salesReturnId).size());
+    }
+
+    @Test
+    void createSalesReturnFailsWhenQuantityExceedsShippedQuantity() {
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
+        InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemorySalesReturnRepository salesReturnRepository = new InMemorySalesReturnRepository();
+        InMemorySalesReturnItemRepository salesReturnItemRepository = new InMemorySalesReturnItemRepository();
+
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID salesOrderId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(activeWarehouse(warehouseId));
+        customerRepository.save(activeCustomer(customerId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "6", "0"));
+        SalesOrder shippedOrder = salesOrder(salesOrderId, SalesOrderStatus.SHIPPED);
+        shippedOrder.setCustomerId(customerId);
+        shippedOrder.setConfirmedWarehouseId(warehouseId);
+        salesOrderRepository.save(shippedOrder);
+        salesOrderItemRepository.save(salesOrderItem(salesOrderId, productId, "4", "15.00"));
+
+        InventoryValidationService validationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                validationService);
+        SalesOrderService salesOrderService = new SalesOrderService(
+                salesOrderRepository,
+                salesOrderItemRepository,
+                inventoryService,
+                validationService,
+                productRepository,
+                customerRepository,
+                salesReturnRepository,
+                salesReturnItemRepository);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> salesOrderService.createSalesReturn(
+                        salesOrderId,
+                        new com.maiu.erp.modules.inventory.application.dto.CreateSalesReturnRequest(
+                                "Over return",
+                                "warehouse lead",
+                                List.of(new com.maiu.erp.modules.inventory.application.dto.CreateSalesReturnItemRequest(
+                                        productId,
+                                        new BigDecimal("5.00"))))));
+
+        assertEquals("Sales return quantity exceeds shipped quantity for product", exception.getMessage());
+    }
+
+    @Test
+    void createSalesReturnBackfillsConfirmedWarehouseFromSalesMovements() {
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
+        InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemorySalesReturnRepository salesReturnRepository = new InMemorySalesReturnRepository();
+        InMemorySalesReturnItemRepository salesReturnItemRepository = new InMemorySalesReturnItemRepository();
+
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID salesOrderId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(activeWarehouse(warehouseId));
+        customerRepository.save(activeCustomer(customerId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "6", "0"));
+
+        SalesOrder shippedOrder = salesOrder(salesOrderId, SalesOrderStatus.SHIPPED);
+        shippedOrder.setCustomerId(customerId);
+        salesOrderRepository.save(shippedOrder);
+        salesOrderItemRepository.save(salesOrderItem(salesOrderId, productId, "4", "15.00"));
+
+        StockMovement shipMovement = new StockMovement();
+        shipMovement.setProductId(productId);
+        shipMovement.setWarehouseId(warehouseId);
+        shipMovement.setMovementType(MovementType.SALES_OUT);
+        shipMovement.setQuantity(new BigDecimal("4.00"));
+        shipMovement.setUnitCost(new BigDecimal("15.00"));
+        shipMovement.setReferenceType("SALES_ORDER");
+        shipMovement.setReferenceId(salesOrderId);
+        shipMovement.setMovementDate(Instant.now());
+        shipMovement.setPerformedBy("warehouse lead");
+        stockMovementRepository.save(shipMovement);
+
+        InventoryValidationService validationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                validationService);
+        SalesOrderService salesOrderService = new SalesOrderService(
+                salesOrderRepository,
+                salesOrderItemRepository,
+                inventoryService,
+                validationService,
+                productRepository,
+                customerRepository,
+                salesReturnRepository,
+                salesReturnItemRepository,
+                stockMovementRepository);
+
+        UUID salesReturnId = salesOrderService.createSalesReturn(
+                salesOrderId,
+                new com.maiu.erp.modules.inventory.application.dto.CreateSalesReturnRequest(
+                        "Legacy SO return",
+                        "warehouse lead",
+                        List.of(new com.maiu.erp.modules.inventory.application.dto.CreateSalesReturnItemRequest(
+                                productId,
+                                new BigDecimal("1.00")))));
+
+        assertEquals(warehouseId, salesOrderRepository.findById(salesOrderId).orElseThrow().getConfirmedWarehouseId());
+        assertEquals(warehouseId, salesReturnRepository.findById(salesReturnId).orElseThrow().getWarehouseId());
     }
 
     private static Product activeProduct(UUID productId) {
@@ -468,6 +787,13 @@ class SalesOrderServiceTest {
         }
 
         @Override
+        public List<StockMovement> findByProjectId(UUID projectId) {
+            return movements.stream()
+                    .filter(movement -> projectId.equals(movement.getProjectId()))
+                    .toList();
+        }
+
+        @Override
         public List<StockMovement> findByReferenceId(UUID referenceId) {
             return movements.stream()
                     .filter(movement -> movement.getReferenceId().equals(referenceId))
@@ -521,6 +847,59 @@ class SalesOrderServiceTest {
             return salesOrders.values().stream()
                     .filter(order -> customerId.equals(order.getCustomerId()))
                     .toList();
+        }
+    }
+
+    private static final class InMemorySalesReturnRepository implements SalesReturnRepository {
+        private final Map<UUID, SalesReturn> salesReturns = new HashMap<>();
+
+        @Override
+        public SalesReturn save(SalesReturn salesReturn) {
+            if (salesReturn.getId() == null) {
+                salesReturn.setId(UUID.randomUUID());
+            }
+            salesReturns.put(salesReturn.getId(), salesReturn);
+            return salesReturn;
+        }
+
+        @Override
+        public Optional<SalesReturn> findById(UUID id) {
+            return Optional.ofNullable(salesReturns.get(id));
+        }
+
+        @Override
+        public Optional<SalesReturn> findByReturnNumber(String returnNumber) {
+            return salesReturns.values().stream().filter(item -> returnNumber.equals(item.getReturnNumber())).findFirst();
+        }
+
+        @Override
+        public List<SalesReturn> findAll() {
+            return salesReturns.values().stream().toList();
+        }
+
+        @Override
+        public List<SalesReturn> findBySalesOrderId(UUID salesOrderId) {
+            return salesReturns.values().stream()
+                    .filter(item -> salesOrderId.equals(item.getSalesOrderId()))
+                    .toList();
+        }
+    }
+
+    private static final class InMemorySalesReturnItemRepository implements SalesReturnItemRepository {
+        private final Map<UUID, List<SalesReturnItem>> itemsByReturnId = new HashMap<>();
+
+        @Override
+        public SalesReturnItem save(SalesReturnItem item) {
+            if (item.getId() == null) {
+                item.setId(UUID.randomUUID());
+            }
+            itemsByReturnId.computeIfAbsent(item.getSalesReturnId(), ignored -> new ArrayList<>()).add(item);
+            return item;
+        }
+
+        @Override
+        public List<SalesReturnItem> findBySalesReturnId(UUID salesReturnId) {
+            return new ArrayList<>(itemsByReturnId.getOrDefault(salesReturnId, List.of()));
         }
     }
 

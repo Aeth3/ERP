@@ -1,6 +1,7 @@
 package com.maiu.erp.modules.inventory.application.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -45,6 +46,8 @@ public class InventoryService {
             String referenceType,
             UUID referenceId,
             String performedBy) {
+        validateWarehouseAndActor(warehouseId, performedBy);
+        String normalizedPerformedBy = performedBy.trim();
         validatePositiveQuantity(quantity);
 
         InventoryStock stock = getOrCreateStock(productId, warehouseId);
@@ -64,7 +67,7 @@ public class InventoryService {
         movement.setUnitCost(unitCost);
         movement.setReferenceType(referenceType);
         movement.setReferenceId(referenceId);
-        movement.setPerformedBy(performedBy);
+        movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
 
         stockMovementRepository.save(movement);
@@ -79,6 +82,8 @@ public class InventoryService {
             String referenceType,
             UUID referenceId,
             String performedBy) {
+        validateWarehouseAndActor(warehouseId, performedBy);
+        String normalizedPerformedBy = performedBy.trim();
         validatePositiveQuantity(quantity);
         InventoryStock stock = inventoryStockRepository
                 .findByProductIdAndWarehouseId(productId, warehouseId)
@@ -108,7 +113,7 @@ public class InventoryService {
         movement.setUnitCost(unitCost);
         movement.setReferenceType(referenceType);
         movement.setReferenceId(referenceId);
-        movement.setPerformedBy(performedBy);
+        movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
         stockMovementRepository.save(movement);
     }
@@ -242,9 +247,10 @@ public class InventoryService {
             String reason,
             String notes,
             String performedBy) {
+        validateWarehouseAndActor(warehouseId, performedBy);
+        String normalizedPerformedBy = performedBy.trim();
         validatePositiveQuantity(quantity);
         inventoryValidationService.validateProductActive(productId);
-        inventoryValidationService.validateWarehouseExists(warehouseId);
 
         String normalizedAdjustmentType = normalizeAdjustmentType(adjustmentType);
         InventoryStock stock = getOrCreateStock(productId, warehouseId);
@@ -276,7 +282,7 @@ public class InventoryService {
         movement.setUnitCost(unitCost);
         movement.setReferenceType("STOCK_ADJUSTMENT");
         movement.setRemarks(formatAdjustmentRemarks(normalizedAdjustmentType, reason, notes));
-        movement.setPerformedBy(performedBy);
+        movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
 
         stockMovementRepository.save(movement);
@@ -292,9 +298,10 @@ public class InventoryService {
             String reason,
             String notes,
             String performedBy) {
+        validateWarehouseAndActor(fromWarehouseId, performedBy);
+        String normalizedPerformedBy = performedBy.trim();
         validatePositiveQuantity(quantity);
         inventoryValidationService.validateProductActive(productId);
-        inventoryValidationService.validateWarehouseExists(fromWarehouseId);
         inventoryValidationService.validateWarehouseExists(toWarehouseId);
 
         if (fromWarehouseId.equals(toWarehouseId)) {
@@ -334,7 +341,7 @@ public class InventoryService {
                 unitCost,
                 transferReferenceId,
                 transferRemarks,
-                performedBy,
+                normalizedPerformedBy,
                 "OUT"));
 
         stockMovementRepository.save(createTransferMovement(
@@ -345,7 +352,7 @@ public class InventoryService {
                 unitCost,
                 transferReferenceId,
                 transferRemarks,
-                performedBy,
+                normalizedPerformedBy,
                 "IN"));
     }
 
@@ -359,6 +366,8 @@ public class InventoryService {
             UUID referenceId,
             String remarks,
             String performedBy) {
+        validateWarehouseAndActor(warehouseId, performedBy);
+        String normalizedPerformedBy = performedBy.trim();
         validatePositiveQuantity(quantity);
 
         InventoryStock stock = inventoryStockRepository
@@ -386,7 +395,115 @@ public class InventoryService {
         movement.setReferenceType("MATERIAL_ISSUE");
         movement.setReferenceId(referenceId);
         movement.setRemarks(remarks);
-        movement.setPerformedBy(performedBy);
+        movement.setPerformedBy(normalizedPerformedBy);
+        movement.setMovementDate(Instant.now());
+        stockMovementRepository.save(movement);
+    }
+
+    @Transactional
+    public void returnStockFromProject(
+            UUID productId,
+            UUID warehouseId,
+            UUID projectId,
+            BigDecimal quantity,
+            BigDecimal unitCost,
+            UUID referenceId,
+            String remarks,
+            String performedBy) {
+        validateWarehouseAndActor(warehouseId, performedBy);
+        String normalizedPerformedBy = performedBy.trim();
+        validatePositiveQuantity(quantity);
+
+        InventoryStock stock = getOrCreateStock(productId, warehouseId);
+        stock.setQuantityOnHand(stock.getQuantityOnHand().add(quantity));
+        stock.setUpdatedAt(Instant.now());
+        inventoryStockRepository.save(stock);
+
+        StockMovement movement = new StockMovement();
+        movement.setProductId(productId);
+        movement.setWarehouseId(warehouseId);
+        movement.setProjectId(projectId);
+        movement.setMovementType(MovementType.RETURN);
+        movement.setQuantity(quantity);
+        movement.setUnitCost(unitCost == null ? BigDecimal.ZERO : unitCost.setScale(2, RoundingMode.HALF_UP));
+        movement.setReferenceType("MATERIAL_RETURN");
+        movement.setReferenceId(referenceId);
+        movement.setRemarks(remarks);
+        movement.setPerformedBy(normalizedPerformedBy);
+        movement.setMovementDate(Instant.now());
+        stockMovementRepository.save(movement);
+    }
+
+    @Transactional
+    public void returnPurchaseStock(
+            UUID productId,
+            UUID warehouseId,
+            BigDecimal quantity,
+            BigDecimal unitCost,
+            UUID referenceId,
+            String remarks,
+            String performedBy) {
+        validateWarehouseAndActor(warehouseId, performedBy);
+        String normalizedPerformedBy = performedBy.trim();
+        validatePositiveQuantity(quantity);
+
+        InventoryStock stock = inventoryStockRepository
+                .findByProductIdAndWarehouseId(productId, warehouseId)
+                .orElseThrow(() -> new NotFoundException("Stock not found"));
+
+        BigDecimal availableQuantity = stock.getQuantityOnHand().subtract(stock.getReservedQuantity());
+        if (availableQuantity.compareTo(quantity) < 0) {
+            throw new BadRequestException("Insufficient available stock");
+        }
+
+        stock.setQuantityOnHand(stock.getQuantityOnHand().subtract(quantity));
+        stock.setUpdatedAt(Instant.now());
+        inventoryStockRepository.save(stock);
+
+        StockMovement movement = new StockMovement();
+        movement.setProductId(productId);
+        movement.setWarehouseId(warehouseId);
+        movement.setProjectId(null);
+        movement.setMovementType(MovementType.RETURN);
+        movement.setQuantity(quantity);
+        movement.setUnitCost(unitCost == null ? BigDecimal.ZERO : unitCost.setScale(2, RoundingMode.HALF_UP));
+        movement.setReferenceType("PURCHASE_RETURN");
+        movement.setReferenceId(referenceId);
+        movement.setRemarks(remarks);
+        movement.setPerformedBy(normalizedPerformedBy);
+        movement.setMovementDate(Instant.now());
+        stockMovementRepository.save(movement);
+    }
+
+    @Transactional
+    public void receiveSalesReturn(
+            UUID productId,
+            UUID warehouseId,
+            BigDecimal quantity,
+            BigDecimal unitPrice,
+            UUID referenceId,
+            String remarks,
+            String performedBy) {
+        validateWarehouseAndActor(warehouseId, performedBy);
+        String normalizedPerformedBy = performedBy.trim();
+        validatePositiveQuantity(quantity);
+
+        InventoryStock stock = getOrCreateStock(productId, warehouseId);
+        stock.setQuantityOnHand(stock.getQuantityOnHand().add(quantity));
+        stock.setUpdatedAt(Instant.now());
+        inventoryStockRepository.save(stock);
+
+        StockMovement movement = new StockMovement();
+        movement.setProductId(productId);
+        movement.setWarehouseId(warehouseId);
+        movement.setProjectId(null);
+        movement.setMovementType(MovementType.RETURN);
+        movement.setQuantity(quantity);
+        movement.setUnitCost(unitPrice == null ? BigDecimal.ZERO : unitPrice.setScale(2, RoundingMode.HALF_UP));
+        movement.setReferenceType("SALES_RETURN");
+        movement.setReferenceId(referenceId);
+        movement.setRemarks(remarks);
+        movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
         stockMovementRepository.save(movement);
     }
@@ -413,6 +530,16 @@ public class InventoryService {
         if (quantity == null
                 || quantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException("Quantity must be greater than zero");
+        }
+    }
+
+    public void validateWarehouseAndActor(
+            UUID warehouseId,
+            String performedBy) {
+        inventoryValidationService.validateWarehouseExists(warehouseId);
+
+        if (performedBy == null || performedBy.isBlank()) {
+            throw new BadRequestException("performedBy is required");
         }
     }
 

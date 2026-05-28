@@ -15,16 +15,23 @@ import org.junit.jupiter.api.Test;
 
 import com.maiu.erp.modules.inventory.application.dto.CreateMaterialIssueItemRequest;
 import com.maiu.erp.modules.inventory.application.dto.CreateMaterialIssueRequest;
+import com.maiu.erp.modules.inventory.application.dto.CreateMaterialReturnItemRequest;
+import com.maiu.erp.modules.inventory.application.dto.CreateMaterialReturnRequest;
+import com.maiu.erp.modules.inventory.application.dto.ReverseMaterialIssueRequest;
 import com.maiu.erp.modules.inventory.domain.enums.MovementType;
 import com.maiu.erp.modules.inventory.domain.model.InventoryStock;
 import com.maiu.erp.modules.inventory.domain.model.MaterialIssue;
 import com.maiu.erp.modules.inventory.domain.model.MaterialIssueItem;
+import com.maiu.erp.modules.inventory.domain.model.MaterialReturn;
+import com.maiu.erp.modules.inventory.domain.model.MaterialReturnItem;
 import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.model.StockMovement;
 import com.maiu.erp.modules.inventory.domain.model.Warehouse;
 import com.maiu.erp.modules.inventory.domain.repository.InventoryStockRepository;
 import com.maiu.erp.modules.inventory.domain.repository.MaterialIssueItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.MaterialIssueRepository;
+import com.maiu.erp.modules.inventory.domain.repository.MaterialReturnItemRepository;
+import com.maiu.erp.modules.inventory.domain.repository.MaterialReturnRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.StockMovementRepository;
 import com.maiu.erp.modules.inventory.domain.repository.WarehouseRepository;
@@ -38,6 +45,8 @@ class MaterialIssueServiceTest {
     void createMaterialIssueConsumesAvailableStock() {
         InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
         InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
         InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
         InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
@@ -64,6 +73,8 @@ class MaterialIssueServiceTest {
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
+                materialReturnRepository,
+                materialReturnItemRepository,
                 inventoryService,
                 inventoryValidationService,
                 projectRepository);
@@ -95,6 +106,8 @@ class MaterialIssueServiceTest {
     void createMaterialIssueFailsWhenProjectIsNotActive() {
         InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
         InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
         InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
         InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
         InMemoryProductRepository productRepository = new InMemoryProductRepository();
@@ -121,6 +134,8 @@ class MaterialIssueServiceTest {
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
+                materialReturnRepository,
+                materialReturnItemRepository,
                 inventoryService,
                 inventoryValidationService,
                 projectRepository);
@@ -137,6 +152,377 @@ class MaterialIssueServiceTest {
                                 BigDecimal.ONE)))));
 
         assertEquals("Project must be active", exception.getMessage());
+    }
+
+    @Test
+    void createMaterialIssueFailsWhenPerformedByIsMissing() {
+        InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
+        InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        UUID projectId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+
+        projectRepository.save(activeProject(projectId));
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(warehouse(warehouseId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "10", "0"));
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        MaterialIssueService materialIssueService = new MaterialIssueService(
+                materialIssueRepository,
+                materialIssueItemRepository,
+                materialReturnRepository,
+                materialReturnItemRepository,
+                inventoryService,
+                inventoryValidationService,
+                projectRepository);
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> materialIssueService.createMaterialIssue(
+                new CreateMaterialIssueRequest(
+                        projectId,
+                        warehouseId,
+                        null,
+                        null,
+                        List.of(new CreateMaterialIssueItemRequest(
+                                productId,
+                                BigDecimal.ONE,
+                                BigDecimal.ONE)))));
+
+        assertEquals("performedBy is required", exception.getMessage());
+    }
+
+    @Test
+    void createMaterialReturnRestoresStockAndRecordsReturn() {
+        InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
+        InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        UUID projectId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID issueId = UUID.randomUUID();
+
+        projectRepository.save(activeProject(projectId));
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(warehouse(warehouseId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "7", "0"));
+
+        MaterialIssue issue = new MaterialIssue();
+        issue.setId(issueId);
+        issue.setIssueNumber("MI-0001");
+        issue.setProjectId(projectId);
+        issue.setWarehouseId(warehouseId);
+        issue.setPerformedBy("foreman");
+        issue.setIssuedAt(Instant.now());
+        materialIssueRepository.save(issue);
+
+        MaterialIssueItem issuedItem = new MaterialIssueItem();
+        issuedItem.setId(UUID.randomUUID());
+        issuedItem.setMaterialIssueId(issueId);
+        issuedItem.setProductId(productId);
+        issuedItem.setQuantity(new BigDecimal("3"));
+        issuedItem.setUnitCost(new BigDecimal("12.50"));
+        issuedItem.setLineTotal(new BigDecimal("37.50"));
+        materialIssueItemRepository.save(issuedItem);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        MaterialIssueService materialIssueService = new MaterialIssueService(
+                materialIssueRepository,
+                materialIssueItemRepository,
+                materialReturnRepository,
+                materialReturnItemRepository,
+                inventoryService,
+                inventoryValidationService,
+                projectRepository);
+
+        UUID returnId = materialIssueService.createMaterialReturn(issueId, new CreateMaterialReturnRequest(
+                "Unused materials",
+                "storekeeper",
+                List.of(new CreateMaterialReturnItemRequest(productId, new BigDecimal("2")))));
+
+        InventoryStock updatedStock = inventoryStockRepository.findByProductIdAndWarehouseId(productId, warehouseId)
+                .orElseThrow();
+        MaterialReturn materialReturn = materialReturnRepository.findById(returnId).orElseThrow();
+        MaterialReturnItem returnItem = materialReturnItemRepository.findByMaterialReturnId(returnId).getFirst();
+        StockMovement movement = stockMovementRepository.findByReferenceId(returnId).getFirst();
+
+        assertEquals(new BigDecimal("9"), updatedStock.getQuantityOnHand());
+        assertEquals(issueId, materialReturn.getMaterialIssueId());
+        assertEquals(new BigDecimal("25.00"), returnItem.getLineTotal());
+        assertEquals(MovementType.RETURN, movement.getMovementType());
+    }
+
+    @Test
+    void createMaterialReturnFailsWhenReturnQuantityExceedsIssuedQuantity() {
+        InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
+        InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        UUID projectId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID issueId = UUID.randomUUID();
+
+        projectRepository.save(activeProject(projectId));
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(warehouse(warehouseId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "7", "0"));
+
+        MaterialIssue issue = new MaterialIssue();
+        issue.setId(issueId);
+        issue.setIssueNumber("MI-0002");
+        issue.setProjectId(projectId);
+        issue.setWarehouseId(warehouseId);
+        issue.setPerformedBy("foreman");
+        issue.setIssuedAt(Instant.now());
+        materialIssueRepository.save(issue);
+
+        MaterialIssueItem issuedItem = new MaterialIssueItem();
+        issuedItem.setId(UUID.randomUUID());
+        issuedItem.setMaterialIssueId(issueId);
+        issuedItem.setProductId(productId);
+        issuedItem.setQuantity(new BigDecimal("3"));
+        issuedItem.setUnitCost(new BigDecimal("12.50"));
+        issuedItem.setLineTotal(new BigDecimal("37.50"));
+        materialIssueItemRepository.save(issuedItem);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        MaterialIssueService materialIssueService = new MaterialIssueService(
+                materialIssueRepository,
+                materialIssueItemRepository,
+                materialReturnRepository,
+                materialReturnItemRepository,
+                inventoryService,
+                inventoryValidationService,
+                projectRepository);
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> materialIssueService.createMaterialReturn(
+                issueId,
+                new CreateMaterialReturnRequest(
+                        null,
+                        "storekeeper",
+                        List.of(new CreateMaterialReturnItemRequest(productId, new BigDecimal("4"))))));
+
+        assertEquals("Return quantity exceeds issued quantity for product", exception.getMessage());
+    }
+
+    @Test
+    void reverseMaterialIssueRestoresOnlyRemainingBalance() {
+        InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
+        InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        UUID projectId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID issueId = UUID.randomUUID();
+
+        projectRepository.save(activeProject(projectId));
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(warehouse(warehouseId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "7", "0"));
+
+        MaterialIssue issue = new MaterialIssue();
+        issue.setId(issueId);
+        issue.setIssueNumber("MI-0003");
+        issue.setProjectId(projectId);
+        issue.setWarehouseId(warehouseId);
+        issue.setPerformedBy("foreman");
+        issue.setIssuedAt(Instant.now());
+        materialIssueRepository.save(issue);
+
+        MaterialIssueItem issuedItem = new MaterialIssueItem();
+        issuedItem.setId(UUID.randomUUID());
+        issuedItem.setMaterialIssueId(issueId);
+        issuedItem.setProductId(productId);
+        issuedItem.setQuantity(new BigDecimal("3"));
+        issuedItem.setUnitCost(new BigDecimal("12.50"));
+        issuedItem.setLineTotal(new BigDecimal("37.50"));
+        materialIssueItemRepository.save(issuedItem);
+
+        MaterialReturn priorReturn = new MaterialReturn();
+        priorReturn.setId(UUID.randomUUID());
+        priorReturn.setReturnNumber("MR-OLD");
+        priorReturn.setMaterialIssueId(issueId);
+        priorReturn.setProjectId(projectId);
+        priorReturn.setWarehouseId(warehouseId);
+        priorReturn.setReversal(false);
+        priorReturn.setPerformedBy("storekeeper");
+        priorReturn.setReturnedAt(Instant.now());
+        materialReturnRepository.save(priorReturn);
+
+        MaterialReturnItem priorReturnItem = new MaterialReturnItem();
+        priorReturnItem.setId(UUID.randomUUID());
+        priorReturnItem.setMaterialReturnId(priorReturn.getId());
+        priorReturnItem.setProductId(productId);
+        priorReturnItem.setQuantity(BigDecimal.ONE);
+        priorReturnItem.setUnitCost(new BigDecimal("12.50"));
+        priorReturnItem.setLineTotal(new BigDecimal("12.50"));
+        materialReturnItemRepository.save(priorReturnItem);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        MaterialIssueService materialIssueService = new MaterialIssueService(
+                materialIssueRepository,
+                materialIssueItemRepository,
+                materialReturnRepository,
+                materialReturnItemRepository,
+                inventoryService,
+                inventoryValidationService,
+                projectRepository);
+
+        UUID reversalId = materialIssueService.reverseMaterialIssue(
+                issueId,
+                new ReverseMaterialIssueRequest("Wrong project", "warehouse lead"));
+
+        InventoryStock updatedStock = inventoryStockRepository.findByProductIdAndWarehouseId(productId, warehouseId)
+                .orElseThrow();
+        MaterialReturn reversal = materialReturnRepository.findById(reversalId).orElseThrow();
+        MaterialReturnItem reversalItem = materialReturnItemRepository.findByMaterialReturnId(reversalId).getFirst();
+
+        assertEquals(new BigDecimal("9"), updatedStock.getQuantityOnHand());
+        assertEquals(true, reversal.isReversal());
+        assertEquals(new BigDecimal("2"), reversalItem.getQuantity());
+        assertEquals("Reversal of MI-0003 | Wrong project", reversal.getRemarks());
+    }
+
+    @Test
+    void reverseMaterialIssueFailsWhenIssueIsAlreadyFullyReturned() {
+        InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
+        InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        UUID projectId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID issueId = UUID.randomUUID();
+
+        projectRepository.save(activeProject(projectId));
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(warehouse(warehouseId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "7", "0"));
+
+        MaterialIssue issue = new MaterialIssue();
+        issue.setId(issueId);
+        issue.setIssueNumber("MI-0004");
+        issue.setProjectId(projectId);
+        issue.setWarehouseId(warehouseId);
+        issue.setPerformedBy("foreman");
+        issue.setIssuedAt(Instant.now());
+        materialIssueRepository.save(issue);
+
+        MaterialIssueItem issuedItem = new MaterialIssueItem();
+        issuedItem.setId(UUID.randomUUID());
+        issuedItem.setMaterialIssueId(issueId);
+        issuedItem.setProductId(productId);
+        issuedItem.setQuantity(new BigDecimal("3"));
+        issuedItem.setUnitCost(new BigDecimal("12.50"));
+        issuedItem.setLineTotal(new BigDecimal("37.50"));
+        materialIssueItemRepository.save(issuedItem);
+
+        MaterialReturn priorReturn = new MaterialReturn();
+        priorReturn.setId(UUID.randomUUID());
+        priorReturn.setReturnNumber("MR-ALL");
+        priorReturn.setMaterialIssueId(issueId);
+        priorReturn.setProjectId(projectId);
+        priorReturn.setWarehouseId(warehouseId);
+        priorReturn.setReversal(false);
+        priorReturn.setPerformedBy("storekeeper");
+        priorReturn.setReturnedAt(Instant.now());
+        materialReturnRepository.save(priorReturn);
+
+        MaterialReturnItem priorReturnItem = new MaterialReturnItem();
+        priorReturnItem.setId(UUID.randomUUID());
+        priorReturnItem.setMaterialReturnId(priorReturn.getId());
+        priorReturnItem.setProductId(productId);
+        priorReturnItem.setQuantity(new BigDecimal("3"));
+        priorReturnItem.setUnitCost(new BigDecimal("12.50"));
+        priorReturnItem.setLineTotal(new BigDecimal("37.50"));
+        materialReturnItemRepository.save(priorReturnItem);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        MaterialIssueService materialIssueService = new MaterialIssueService(
+                materialIssueRepository,
+                materialIssueItemRepository,
+                materialReturnRepository,
+                materialReturnItemRepository,
+                inventoryService,
+                inventoryValidationService,
+                projectRepository);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> materialIssueService.reverseMaterialIssue(
+                        issueId,
+                        new ReverseMaterialIssueRequest(null, "warehouse lead")));
+
+        assertEquals("Material issue is already fully reversed or returned", exception.getMessage());
     }
 
     private static Project activeProject(UUID projectId) {
@@ -238,6 +624,57 @@ class MaterialIssueServiceTest {
         }
     }
 
+    private static final class InMemoryMaterialReturnRepository implements MaterialReturnRepository {
+        private final Map<UUID, MaterialReturn> returns = new HashMap<>();
+
+        @Override
+        public MaterialReturn save(MaterialReturn materialReturn) {
+            if (materialReturn.getId() == null) {
+                materialReturn.setId(UUID.randomUUID());
+            }
+            returns.put(materialReturn.getId(), materialReturn);
+            return materialReturn;
+        }
+
+        @Override
+        public Optional<MaterialReturn> findById(UUID id) {
+            return Optional.ofNullable(returns.get(id));
+        }
+
+        @Override
+        public Optional<MaterialReturn> findByReturnNumber(String returnNumber) {
+            return returns.values().stream().filter(item -> returnNumber.equals(item.getReturnNumber())).findFirst();
+        }
+
+        @Override
+        public List<MaterialReturn> findAll() {
+            return returns.values().stream().toList();
+        }
+
+        @Override
+        public List<MaterialReturn> findByMaterialIssueId(UUID materialIssueId) {
+            return returns.values().stream().filter(item -> materialIssueId.equals(item.getMaterialIssueId())).toList();
+        }
+    }
+
+    private static final class InMemoryMaterialReturnItemRepository implements MaterialReturnItemRepository {
+        private final Map<UUID, List<MaterialReturnItem>> itemsByReturnId = new HashMap<>();
+
+        @Override
+        public MaterialReturnItem save(MaterialReturnItem item) {
+            if (item.getId() == null) {
+                item.setId(UUID.randomUUID());
+            }
+            itemsByReturnId.computeIfAbsent(item.getMaterialReturnId(), ignored -> new java.util.ArrayList<>()).add(item);
+            return item;
+        }
+
+        @Override
+        public List<MaterialReturnItem> findByMaterialReturnId(UUID materialReturnId) {
+            return new java.util.ArrayList<>(itemsByReturnId.getOrDefault(materialReturnId, List.of()));
+        }
+    }
+
     private static final class InMemoryInventoryStockRepository implements InventoryStockRepository {
         private final Map<String, InventoryStock> stocks = new HashMap<>();
 
@@ -295,6 +732,11 @@ class MaterialIssueServiceTest {
         @Override
         public List<StockMovement> findByWarehouseId(UUID warehouseId) {
             return movements.values().stream().filter(movement -> warehouseId.equals(movement.getWarehouseId())).toList();
+        }
+
+        @Override
+        public List<StockMovement> findByProjectId(UUID projectId) {
+            return movements.values().stream().filter(movement -> projectId.equals(movement.getProjectId())).toList();
         }
 
         @Override

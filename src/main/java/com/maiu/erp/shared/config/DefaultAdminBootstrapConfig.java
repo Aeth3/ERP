@@ -2,6 +2,8 @@ package com.maiu.erp.shared.config;
 
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +17,7 @@ import com.maiu.erp.modules.identity.application.service.DefaultRoleService;
 
 @Configuration
 public class DefaultAdminBootstrapConfig {
+    private static final Logger log = LoggerFactory.getLogger(DefaultAdminBootstrapConfig.class);
 
     @Bean
     CommandLineRunner seedDefaultAdmin(
@@ -28,13 +31,17 @@ public class DefaultAdminBootstrapConfig {
             @Value("${app.seed.default-admin.password:admin123}") String adminPassword) {
         return args -> {
             if (!enabled) {
+                log.info("Default admin seeding is disabled");
                 return;
             }
 
             String normalizedEmail = adminEmail.trim().toLowerCase();
             if (userRepository.findByEmail(normalizedEmail).isPresent()) {
+                log.info("Default admin seeding skipped because user already exists: {}", normalizedEmail);
                 return;
             }
+
+            log.info("Seeding default admin user: {}", normalizedEmail);
 
             Role userRole = defaultRoleService.getOrCreateUserRole();
             Role adminRole = defaultRoleService.getOrCreateAdminRole();
@@ -48,6 +55,7 @@ public class DefaultAdminBootstrapConfig {
             adminUser.setTenantId(defaultTenantService.getDefaultTenantId());
 
             userRepository.save(adminUser);
+            log.info("Default admin user created successfully: {}", normalizedEmail);
         };
     }
 }

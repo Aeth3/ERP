@@ -1,7 +1,10 @@
 package com.maiu.erp.modules.project.application.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -18,6 +21,13 @@ import com.maiu.erp.shared.exception.NotFoundException;
 
 @Service
 public class ProjectService {
+    private static final Map<ProjectStatus, EnumSet<ProjectStatus>> ALLOWED_TRANSITIONS = Map.of(
+            ProjectStatus.DRAFT, EnumSet.of(ProjectStatus.ACTIVE, ProjectStatus.CANCELLED),
+            ProjectStatus.ACTIVE, EnumSet.of(ProjectStatus.ON_HOLD, ProjectStatus.COMPLETED, ProjectStatus.CANCELLED),
+            ProjectStatus.ON_HOLD, EnumSet.of(ProjectStatus.ACTIVE, ProjectStatus.CANCELLED),
+            ProjectStatus.COMPLETED, EnumSet.noneOf(ProjectStatus.class),
+            ProjectStatus.CANCELLED, EnumSet.noneOf(ProjectStatus.class));
+
     private final ProjectRepository projectRepository;
     private final CustomerRepository customerRepository;
 
@@ -42,6 +52,7 @@ public class ProjectService {
         project.setLocation(trimToNull(request.location()));
         project.setStartDate(request.startDate());
         project.setTargetEndDate(request.targetEndDate());
+        project.setBudgetAmount(normalizeBudgetAmount(request.budgetAmount()));
         project.setStatus(ProjectStatus.DRAFT);
         project.setCreatedAt(Instant.now());
         project.setUpdatedAt(Instant.now());
@@ -66,6 +77,7 @@ public class ProjectService {
         project.setLocation(trimToNull(request.location()));
         project.setStartDate(request.startDate());
         project.setTargetEndDate(request.targetEndDate());
+        project.setBudgetAmount(normalizeBudgetAmount(request.budgetAmount()));
         project.setUpdatedAt(Instant.now());
         projectRepository.save(project);
     }
@@ -88,10 +100,15 @@ public class ProjectService {
 
     private void changeStatus(UUID projectId, ProjectStatus status) {
         Project project = getProjectById(projectId);
-        if (project.getStatus() == ProjectStatus.CANCELLED
-                || project.getStatus() == ProjectStatus.COMPLETED) {
-            throw new BadRequestException("Project status can no longer be changed");
+        ProjectStatus currentStatus = project.getStatus();
+        if (currentStatus == status) {
+            throw new BadRequestException("Project is already in status " + status.name());
         }
+
+        if (!ALLOWED_TRANSITIONS.getOrDefault(currentStatus, EnumSet.noneOf(ProjectStatus.class)).contains(status)) {
+            throw new BadRequestException("Project status cannot move from " + currentStatus.name() + " to " + status.name());
+        }
+
         project.setStatus(status);
         project.setUpdatedAt(Instant.now());
         projectRepository.save(project);
@@ -121,5 +138,17 @@ public class ProjectService {
 
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private BigDecimal normalizeBudgetAmount(BigDecimal budgetAmount) {
+        if (budgetAmount == null) {
+            return null;
+        }
+
+        if (budgetAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BadRequestException("Budget amount must be zero or greater");
+        }
+
+        return budgetAmount;
     }
 }

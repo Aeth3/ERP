@@ -1,6 +1,7 @@
 package com.maiu.erp.modules.inventory.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
@@ -44,6 +45,23 @@ class WarehouseServiceTest {
                 () -> warehouseService.deactivateWarehouse(warehouseId));
 
         assertEquals("Warehouse cannot be deactivated while stock exists", exception.getMessage());
+    }
+
+    @Test
+    void activateWarehouseMarksWarehouseActive() {
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        WarehouseService warehouseService = new WarehouseService(warehouseRepository, inventoryStockRepository);
+
+        Warehouse warehouse = new Warehouse();
+        warehouse.setCode("MAIN-WH");
+        warehouse.setName("Main Warehouse");
+        warehouse.setActive(false);
+        UUID warehouseId = warehouseService.createWarehouse(warehouse);
+
+        warehouseService.activateWarehouse(warehouseId);
+
+        assertTrue(warehouseRepository.findById(warehouseId).orElseThrow().getActive());
     }
 
     private static final class InMemoryWarehouseRepository implements WarehouseRepository {

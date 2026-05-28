@@ -1,6 +1,8 @@
 # Inventory Module Flow
 
-This document describes the current implemented flow for the inventory and project-linked material operations as of May 25, 2026.
+This document describes the current implemented flow for the inventory and project-linked material operations as of May 26, 2026.
+
+Monetary values referenced in this document should be treated as Philippine peso (PHP).
 
 ## Overview
 
@@ -11,8 +13,12 @@ The module currently supports:
 - update and deactivate flows for categories, suppliers, warehouses, and products
 - product creation, update, deactivate, and lookup
 - purchase order creation, approval, receiving, cancellation, project assignment, and lookup
+- purchase return creation and lookup
 - sales order creation, confirmation, shipping, cancellation, and lookup
+- sales return creation and lookup
 - project material issue creation and lookup
+- project material return creation and lookup
+- project material issue reversal
 - stock lookup by product and warehouse
 - stock movement history lookup
 - manual stock adjustment
@@ -56,6 +62,10 @@ Operational correction flows are also supported:
 
 - cancel a purchase order before it is received
 - cancel a sales order before it is shipped or delivered
+- return previously issued project materials back into warehouse stock
+- reverse the remaining unrecovered balance of a posted project material issue
+- return previously received purchase items back to supplier from the original receive warehouse
+- return shipped sales items back into the original sales warehouse
 - adjust stock up or down
 - transfer stock between warehouses
 - review the movement ledger for audit/history
@@ -75,6 +85,7 @@ Current behavior:
 - project code is required and must be unique
 - project name is required
 - customer must exist
+- project budget amount is optional and must be zero or greater
 - project starts in `DRAFT`
 - completed or cancelled projects cannot change status again
 
@@ -235,6 +246,28 @@ On cancel:
 
 - status becomes `CANCELLED`
 
+## Purchase Return Flow
+
+### 1. Create Purchase Return
+
+When a purchase return is created:
+
+- source purchase order must exist
+- purchase order must be `RECEIVED`
+- the purchase order must have a stored receive warehouse
+- `performedBy` is required
+- at least one return item is required
+- each return item product must have existed on the source purchase order
+- each return quantity must be greater than zero
+- total returned quantity for a product cannot exceed the originally received quantity
+
+On return:
+
+- `quantityOnHand` is reduced in the same warehouse used by the original PO receive
+- a purchase return header and line items are stored
+- stock movement entries are created with movement type `RETURN`
+- each movement is tagged with reference type `PURCHASE_RETURN`
+
 ## Sales Order Flow
 
 ### 1. Create Sales Order
@@ -296,6 +329,28 @@ On cancel:
 - status becomes `CANCELLED`
 - if the order was `CONFIRMED`, reserved stock is released
 
+## Sales Return Flow
+
+### 1. Create Sales Return
+
+When a sales return is created:
+
+- source sales order must exist
+- sales order must be `SHIPPED` or `DELIVERED`
+- the sales order must have a stored confirmed warehouse
+- `performedBy` is required
+- at least one return item is required
+- each return item product must have existed on the source sales order
+- each return quantity must be greater than zero
+- total returned quantity for a product cannot exceed the originally shipped quantity
+
+On return:
+
+- `quantityOnHand` is increased in the same warehouse used by the original sales shipment
+- a sales return header and line items are stored
+- stock movement entries are created with movement type `RETURN`
+- each movement is tagged with reference type `SALES_RETURN`
+
 ## Material Issue Flow
 
 ### 1. Create Material Issue
@@ -325,12 +380,63 @@ On issue:
 Supported lookup:
 
 - `GET /projects/{id}/cost-summary`
+- `GET /projects/{id}/movements`
 
 Current summary includes:
 
+- project budget amount when set
 - total purchase order amount linked to the project
 - total material issued cost linked to the project
-- material issue totals grouped by product
+- total material returned cost linked to the project
+- net material issued cost after returns
+- budget variance based on net material issued cost
+- material issue and return totals grouped by product
+
+## Material Return Flow
+
+### 1. Create Material Return
+
+When a material return is created:
+
+- source material issue must exist
+- `performedBy` is required
+- at least one return item is required
+- each item must reference a product that existed on the source material issue
+- each item quantity must be greater than zero
+- total returned quantity for a product cannot exceed the originally issued quantity
+
+On return:
+
+- `quantityOnHand` is increased in the same warehouse used by the source material issue
+- a material return header and line items are stored
+- stock movement entries are created with movement type `RETURN`
+- each movement is tagged with `projectId`
+
+This means:
+
+- incorrect or unused site materials can be brought back into warehouse stock
+- project net consumption can go down when materials are returned
+
+### 2. Reverse Material Issue
+
+When a material issue is reversed:
+
+- source material issue must exist
+- `performedBy` is required
+- only the remaining unrecovered quantity can be reversed
+- fully returned or already fully reversed issues cannot be reversed again
+
+On reversal:
+
+- `quantityOnHand` is increased in the same warehouse used by the source material issue
+- a material return record is stored with a `reversal` flag for audit clarity
+- stock movement entries are created with movement type `RETURN`
+- each movement is tagged with `projectId`
+
+This means:
+
+- wrongly posted project issues can be corrected without editing history
+- reversal restores only what has not already been returned manually
 
 ## Stock Operations
 
@@ -408,7 +514,10 @@ Current stock behavior:
 - receiving inventory increases `quantityOnHand`
 - confirming a sales order increases `reservedQuantity`
 - shipping a sales order decreases both `quantityOnHand` and reserved stock
+- sales returns increase `quantityOnHand`
 - project material issues decrease only `quantityOnHand`
+- project material returns increase `quantityOnHand`
+- project material issue reversals increase `quantityOnHand` through reversal-marked returns
 - cancelling a confirmed sales order decreases `reservedQuantity`
 - adjustments only change `quantityOnHand`
 - transfers change `quantityOnHand` in both warehouses
@@ -418,7 +527,10 @@ This means:
 - received stock becomes available to sell or issue
 - confirmed stock is held for shipping
 - shipped stock leaves the warehouse
+- sales returns restore shipped stock back into the warehouse
 - project issues consume available stock for a construction job
+- project returns restore stock from a construction job back into the warehouse
+- project reversals correct wrong site issues while preserving an auditable trail
 - cancelled confirmed orders release reservations back to available stock
 
 ## Exception Handling
@@ -453,22 +565,26 @@ The global exception handler maps these to HTTP responses with a consistent payl
 - `POST /projects/{id}/complete`
 - `POST /projects/{id}/cancel`
 - `GET /projects/{id}/cost-summary`
+- `GET /projects/{id}/movements`
 
 ### Master Data
 
 - `POST /inventory/categories`
 - `PUT /inventory/categories/{id}`
 - `POST /inventory/categories/{id}/deactivate`
+- `POST /inventory/categories/{id}/activate`
 - `GET /inventory/categories`
 - `GET /inventory/categories/{id}`
 - `POST /inventory/suppliers`
 - `PUT /inventory/suppliers/{id}`
 - `POST /inventory/suppliers/{id}/deactivate`
+- `POST /inventory/suppliers/{id}/activate`
 - `GET /inventory/suppliers`
 - `GET /inventory/suppliers/{id}`
 - `POST /inventory/warehouses`
 - `PUT /inventory/warehouses/{id}`
 - `POST /inventory/warehouses/{id}/deactivate`
+- `POST /inventory/warehouses/{id}/activate`
 - `GET /inventory/warehouses`
 - `GET /inventory/warehouses/{id}`
 - `POST /inventory/units`
@@ -483,6 +599,7 @@ The global exception handler maps these to HTTP responses with a consistent payl
 - `POST /inventory/products`
 - `PUT /inventory/products/{id}`
 - `POST /inventory/products/{id}/deactivate`
+- `POST /inventory/products/{id}/activate`
 - `GET /inventory/products`
 - `GET /inventory/products/{id}`
 
@@ -493,7 +610,10 @@ The global exception handler maps these to HTTP responses with a consistent payl
 - `GET /inventory/purchase-orders/{id}`
 - `POST /inventory/purchase-orders/{id}/approve`
 - `POST /inventory/purchase-orders/{id}/receive`
+- `POST /inventory/purchase-orders/{id}/returns`
 - `POST /inventory/purchase-orders/{id}/cancel`
+- `GET /inventory/purchase-orders/returns`
+- `GET /inventory/purchase-orders/returns/{id}`
 
 ### Sales Orders
 
@@ -502,13 +622,20 @@ The global exception handler maps these to HTTP responses with a consistent payl
 - `GET /inventory/sales-orders/{id}`
 - `POST /inventory/sales-orders/{id}/confirm`
 - `POST /inventory/sales-orders/{id}/ship`
+- `POST /inventory/sales-orders/{id}/returns`
 - `POST /inventory/sales-orders/{id}/cancel`
+- `GET /inventory/sales-orders/returns`
+- `GET /inventory/sales-orders/returns/{id}`
 
 ### Material Issues
 
 - `POST /inventory/material-issues`
 - `GET /inventory/material-issues`
 - `GET /inventory/material-issues/{id}`
+- `POST /inventory/material-issues/{id}/returns`
+- `POST /inventory/material-issues/{id}/reverse`
+- `GET /inventory/material-issues/returns`
+- `GET /inventory/material-issues/returns/{id}`
 
 ### Inventory
 
@@ -525,18 +652,15 @@ The global exception handler maps these to HTTP responses with a consistent payl
 
 The module is in a stronger construction-ready state now, but these gaps still remain:
 
-- no return flow yet for purchase, sales, or project issue operations
-- no reverse or reopen flow for received purchase orders, shipped sales orders, or posted material issues
-- no explicit reactivation endpoints for categories, suppliers, warehouses, products, or projects
-- no project budget and variance layer yet, only summary costing
+- no reverse or reopen flow yet for received purchase orders or shipped sales orders
+- project budget reporting is stronger now, but not yet grouped into richer cost structures such as phases or formal cost categories
 - test coverage is improving but still lighter than the total business surface area
 
 ## Suggested Next Steps
 
 The most practical next improvements are:
 
-1. Add return flows for inbound, outbound, and project issue inventory.
-2. Add project material returns or reversal flows for incorrect issues.
-3. Expand automated tests around project status transitions and project-linked procurement.
-4. Add richer stock movement filters such as date range, movement type, and project ID.
-5. Introduce project budgets and variance reporting if the business needs deeper costing.
+1. Expand project movement and reporting filters by date, movement type, and warehouse.
+2. Expand automated tests around project status transitions and project-linked procurement.
+3. Add richer stock movement filters such as date range, movement type, and project ID.
+4. Evolve project budgeting from one budget amount into budget lines and deeper variance reporting.

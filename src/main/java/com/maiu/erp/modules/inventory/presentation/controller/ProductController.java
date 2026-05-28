@@ -74,6 +74,13 @@ public class ProductController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Void> activateProduct(
+            @PathVariable UUID id) {
+        productService.activateProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     public ResponseEntity<List<ProductDto>> getProducts(
             @RequestParam(defaultValue = "false") boolean activeOnly) {

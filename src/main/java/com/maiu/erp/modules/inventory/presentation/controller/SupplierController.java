@@ -57,6 +57,13 @@ public class SupplierController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Void> activateSupplier(
+            @PathVariable UUID id) {
+        supplierService.activateSupplier(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     public ResponseEntity<List<SupplierDto>> getSuppliers(
             @RequestParam(defaultValue = "false") boolean activeOnly) {

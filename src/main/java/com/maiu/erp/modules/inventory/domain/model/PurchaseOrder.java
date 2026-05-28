@@ -12,6 +12,7 @@ public class PurchaseOrder {
     private String poNumber;
     private UUID supplierId;
     private UUID projectId;
+    private UUID receivedWarehouseId;
     private PurchaseOrderStatus status;
     private LocalDate orderDate;
     private LocalDate expectedDate;
@@ -75,8 +76,16 @@ public class PurchaseOrder {
         return projectId;
     }
 
+    public UUID getReceivedWarehouseId() {
+        return receivedWarehouseId;
+    }
+
     public LocalDate getOrderDate() {
         return orderDate;
+    }
+
+    public void setReceivedWarehouseId(UUID receivedWarehouseId) {
+        this.receivedWarehouseId = receivedWarehouseId;
     }
 
     public LocalDate getExpectedDate() {

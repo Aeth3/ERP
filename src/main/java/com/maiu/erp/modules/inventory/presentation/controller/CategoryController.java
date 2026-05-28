@@ -65,6 +65,13 @@ public class CategoryController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Void> activateCategory(
+            @PathVariable UUID id) {
+        categoryService.activateCategory(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     public ResponseEntity<List<CategoryDto>> getCategories(
             @RequestParam(defaultValue = "false") boolean activeOnly) {

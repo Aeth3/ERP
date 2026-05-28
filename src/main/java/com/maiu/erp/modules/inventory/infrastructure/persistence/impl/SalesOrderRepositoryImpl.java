@@ -86,6 +86,9 @@ public class SalesOrderRepositoryImpl
         so.setCustomerId(
                 entity.getCustomerId());
 
+        so.setConfirmedWarehouseId(
+                entity.getConfirmedWarehouseId());
+
         so.setStatus(
                 entity.getStatus());
 
@@ -112,6 +115,9 @@ public class SalesOrderRepositoryImpl
 
         entity.setCustomerId(
                 salesOrder.getCustomerId());
+
+        entity.setConfirmedWarehouseId(
+                salesOrder.getConfirmedWarehouseId());
 
         entity.setStatus(
                 salesOrder.getStatus());

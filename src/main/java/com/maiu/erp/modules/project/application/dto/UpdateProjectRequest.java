@@ -1,5 +1,6 @@
 package com.maiu.erp.modules.project.application.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -13,5 +14,6 @@ public record UpdateProjectRequest(
         UUID customerId,
         String location,
         LocalDate startDate,
-        LocalDate targetEndDate) {
+        LocalDate targetEndDate,
+        BigDecimal budgetAmount) {
 }

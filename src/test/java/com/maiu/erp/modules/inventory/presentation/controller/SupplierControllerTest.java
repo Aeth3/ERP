@@ -60,4 +60,14 @@ class SupplierControllerTest {
 
         verify(supplierService).deactivateSupplier(supplierId);
     }
+
+    @Test
+    void activateSupplierReturnsNoContent() throws Exception {
+        UUID supplierId = UUID.randomUUID();
+
+        mockMvc.perform(post("/inventory/suppliers/{id}/activate", supplierId))
+                .andExpect(status().isNoContent());
+
+        verify(supplierService).activateSupplier(supplierId);
+    }
 }

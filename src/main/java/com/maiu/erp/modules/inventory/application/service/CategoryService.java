@@ -56,6 +56,13 @@ public class CategoryService {
         categoryRepository.save(category);
     }
 
+    public void activateCategory(
+            UUID categoryId) {
+        Category category = getCategoryById(categoryId);
+        category.setActive(true);
+        categoryRepository.save(category);
+    }
+
     public List<Category> getCategories(boolean activeOnly) {
         return activeOnly
                 ? categoryRepository.findActiveCategories()

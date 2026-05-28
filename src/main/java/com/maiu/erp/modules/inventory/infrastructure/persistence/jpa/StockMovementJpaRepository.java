@@ -17,6 +17,9 @@ public interface StockMovementJpaRepository
     List<StockMovementEntity> findByWarehouseId(
             UUID warehouseId);
 
+    List<StockMovementEntity> findByProjectId(
+            UUID projectId);
+
     List<StockMovementEntity> findByReferenceId(
             UUID referenceId);
 

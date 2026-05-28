@@ -8,16 +8,21 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.maiu.erp.modules.project.application.dto.ActionResponse;
 import com.maiu.erp.modules.project.application.dto.CreateProjectRequest;
+import com.maiu.erp.modules.project.application.dto.CreateProjectBudgetLineRequest;
 import com.maiu.erp.modules.project.application.dto.IdResponse;
+import com.maiu.erp.modules.project.application.dto.ProjectBudgetLineDto;
 import com.maiu.erp.modules.project.application.dto.ProjectDto;
 import com.maiu.erp.modules.project.application.dto.UpdateProjectRequest;
+import com.maiu.erp.modules.project.application.service.ProjectBudgetService;
 import com.maiu.erp.modules.project.application.service.ProjectService;
+import com.maiu.erp.modules.project.domain.model.ProjectBudgetLine;
 import com.maiu.erp.modules.project.domain.model.Project;
 
 import jakarta.validation.Valid;
@@ -26,9 +31,11 @@ import jakarta.validation.Valid;
 @RequestMapping("/projects")
 public class ProjectController {
     private final ProjectService projectService;
+    private final ProjectBudgetService projectBudgetService;
 
-    public ProjectController(ProjectService projectService) {
+    public ProjectController(ProjectService projectService, ProjectBudgetService projectBudgetService) {
         this.projectService = projectService;
+        this.projectBudgetService = projectBudgetService;
     }
 
     @PostMapping
@@ -52,6 +59,35 @@ public class ProjectController {
     @GetMapping("/{id}")
     public ResponseEntity<ProjectDto> getProject(@PathVariable UUID id) {
         return ResponseEntity.ok(toDto(projectService.getProjectById(id)));
+    }
+
+    @PostMapping("/{id}/budget-lines")
+    public ResponseEntity<IdResponse> createBudgetLine(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateProjectBudgetLineRequest request) {
+        return ResponseEntity.status(201).body(new IdResponse(projectBudgetService.createBudgetLine(id, request)));
+    }
+
+    @GetMapping("/{id}/budget-lines")
+    public ResponseEntity<List<ProjectBudgetLineDto>> getBudgetLines(@PathVariable UUID id) {
+        return ResponseEntity.ok(projectBudgetService.getBudgetLines(id).stream().map(this::toBudgetLineDto).toList());
+    }
+
+    @PutMapping("/{id}/budget-lines/{budgetLineId}")
+    public ResponseEntity<ActionResponse> updateBudgetLine(
+            @PathVariable UUID id,
+            @PathVariable UUID budgetLineId,
+            @Valid @RequestBody CreateProjectBudgetLineRequest request) {
+        projectBudgetService.updateBudgetLine(id, budgetLineId, request);
+        return ResponseEntity.ok(new ActionResponse("Project budget line updated successfully"));
+    }
+
+    @DeleteMapping("/{id}/budget-lines/{budgetLineId}")
+    public ResponseEntity<ActionResponse> deleteBudgetLine(
+            @PathVariable UUID id,
+            @PathVariable UUID budgetLineId) {
+        projectBudgetService.deleteBudgetLine(id, budgetLineId);
+        return ResponseEntity.ok(new ActionResponse("Project budget line deleted successfully"));
     }
 
     @PostMapping("/{id}/activate")
@@ -87,8 +123,20 @@ public class ProjectController {
                 project.getLocation(),
                 project.getStartDate(),
                 project.getTargetEndDate(),
+                project.getBudgetAmount(),
                 project.getStatus(),
                 project.getCreatedAt(),
                 project.getUpdatedAt());
+    }
+
+    private ProjectBudgetLineDto toBudgetLineDto(ProjectBudgetLine budgetLine) {
+        return new ProjectBudgetLineDto(
+                budgetLine.getId(),
+                budgetLine.getProjectId(),
+                budgetLine.getCostCode(),
+                budgetLine.getDescription(),
+                budgetLine.getBudgetAmount(),
+                budgetLine.getCreatedAt(),
+                budgetLine.getUpdatedAt());
     }
 }

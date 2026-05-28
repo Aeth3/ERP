@@ -1,6 +1,7 @@
 package com.maiu.erp.modules.inventory.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.HashMap;
@@ -43,6 +44,23 @@ class SupplierServiceTest {
                 () -> supplierService.deactivateSupplier(supplierId));
 
         assertEquals("Supplier cannot be deactivated while purchase orders reference it", exception.getMessage());
+    }
+
+    @Test
+    void activateSupplierMarksSupplierActive() {
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        SupplierService supplierService = new SupplierService(supplierRepository, purchaseOrderRepository);
+
+        Supplier supplier = new Supplier();
+        supplier.setCode("SUP-001");
+        supplier.setName("Supplier");
+        supplier.setActive(false);
+        UUID supplierId = supplierService.createSupplier(supplier);
+
+        supplierService.activateSupplier(supplierId);
+
+        assertTrue(supplierRepository.findById(supplierId).orElseThrow().getActive());
     }
 
     private static final class InMemorySupplierRepository implements SupplierRepository {

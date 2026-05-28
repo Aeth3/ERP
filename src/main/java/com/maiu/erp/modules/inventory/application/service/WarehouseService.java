@@ -64,6 +64,13 @@ public class WarehouseService {
         warehouseRepository.save(warehouse);
     }
 
+    public void activateWarehouse(
+            UUID warehouseId) {
+        Warehouse warehouse = getWarehouseById(warehouseId);
+        warehouse.setActive(true);
+        warehouseRepository.save(warehouse);
+    }
+
     public List<Warehouse> getWarehouses(boolean activeOnly) {
         return activeOnly
                 ? warehouseRepository.findActiveWarehouses()

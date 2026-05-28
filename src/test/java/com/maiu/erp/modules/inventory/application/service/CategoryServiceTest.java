@@ -1,6 +1,7 @@
 package com.maiu.erp.modules.inventory.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.HashMap;
@@ -42,6 +43,22 @@ class CategoryServiceTest {
                 () -> categoryService.deactivateCategory(categoryId));
 
         assertEquals("Category cannot be deactivated while products reference it", exception.getMessage());
+    }
+
+    @Test
+    void activateCategoryMarksCategoryActive() {
+        InMemoryCategoryRepository categoryRepository = new InMemoryCategoryRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        CategoryService categoryService = new CategoryService(categoryRepository, productRepository);
+
+        Category category = new Category();
+        category.setName("Spare Parts");
+        category.setActive(false);
+        UUID categoryId = categoryService.createCategory(category);
+
+        categoryService.activateCategory(categoryId);
+
+        assertTrue(categoryRepository.findById(categoryId).orElseThrow().isActive());
     }
 
     private static final class InMemoryCategoryRepository implements CategoryRepository {

@@ -1,6 +1,14 @@
 # backend env setup
 copy .env.example .env
 
+# optional local override
+# keep machine-specific secrets in .env.local
+# this file is imported by application.properties and stays untracked
+# copy .env.local.example .env.local
+# example:
+# DB_PASSWORD=your-local-password
+# JWT_SECRET=your-local-jwt-secret
+
 # run locally with dev profile
 cd ERP
 ./gradlew bootRun --args="--spring.profiles.active=dev"
@@ -17,8 +25,17 @@ $env:SPRING_PROFILES_ACTIVE="dev"
 # email: admin@maiu.local
 # password: admin123
 
+# database migrations
+# Flyway is enabled by default
+# dev keeps hibernate update for convenience
+# docker/prod default to hibernate validate + Flyway migrations
+
 # local
 docker compose up -d
+
+# safer local docker flow from workspace root
+# copy ..\.env.compose.example ..\.env.compose
+# docker compose --env-file ..\.env.compose -f ..\docker-compose.yml up -d
 
 # ec2
 docker compose -p remnant-life-ec2 -f docker-compose-ec2.yml up -d
@@ -37,3 +54,24 @@ sudo docker run -d -p 8080:8080 \
   --name remnant_app \
   -e SPRING_PROFILES_ACTIVE=prod \
   ajdamalan/remnant-life-ec2-app:x.x.x
+
+# production compose flow from workspace root
+# copy ..\.env.compose.prod.example ..\.env.compose.prod
+# fill in real DB/JWT values outside git
+# docker compose --env-file ..\.env.compose.prod -f ..\docker-compose-prod.yml pull
+# docker compose --env-file ..\.env.compose.prod -f ..\docker-compose-prod.yml up -d
+
+# security note
+# if DB passwords or JWT secrets were ever committed, rotate them before the next deployment
+# see docs/SECRET_ROTATION.md for a concrete checklist and search targets
+# see docs/ENV_FILE_MAP.md for the exact per-file env split
+
+# docs
+# inventory and construction flows live under docs/
+# see docs/INVENTORY_FLOW.md
+# see docs/CONSTRUCTION_CLIENT_PROCESS_FLOW.md
+# see docs/PROJECT_MODULE_PLAN.md
+# see docs/MODULE_IMPLEMENTATION_PLAN.md
+
+# quick secret generation in powershell
+# [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))

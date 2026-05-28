@@ -21,10 +21,14 @@ import com.maiu.erp.modules.inventory.domain.model.Customer;
 import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrder;
 import com.maiu.erp.modules.inventory.domain.model.SalesOrderItem;
+import com.maiu.erp.modules.inventory.domain.model.SalesReturn;
+import com.maiu.erp.modules.inventory.domain.model.SalesReturnItem;
 import com.maiu.erp.modules.inventory.domain.repository.CustomerRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SalesOrderRepository;
+import com.maiu.erp.modules.inventory.domain.repository.SalesReturnItemRepository;
+import com.maiu.erp.modules.inventory.domain.repository.SalesReturnRepository;
 
 import java.time.LocalDate;
 
@@ -50,7 +54,9 @@ class SalesOrderCreationServiceTest {
                 null,
                 null,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         UUID salesOrderId = salesOrderService.createSalesOrder(
                 new CreateSalesOrderRequest(
@@ -92,7 +98,9 @@ class SalesOrderCreationServiceTest {
                 null,
                 null,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -124,7 +132,9 @@ class SalesOrderCreationServiceTest {
                 null,
                 null,
                 productRepository,
-                customerRepository);
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -319,6 +329,59 @@ class SalesOrderCreationServiceTest {
             return customers.values().stream()
                     .filter(customer -> Boolean.TRUE.equals(customer.getActive()))
                     .toList();
+        }
+    }
+
+    private static final class InMemorySalesReturnRepository implements SalesReturnRepository {
+        private final Map<UUID, SalesReturn> salesReturns = new HashMap<>();
+
+        @Override
+        public SalesReturn save(SalesReturn salesReturn) {
+            if (salesReturn.getId() == null) {
+                salesReturn.setId(UUID.randomUUID());
+            }
+            salesReturns.put(salesReturn.getId(), salesReturn);
+            return salesReturn;
+        }
+
+        @Override
+        public Optional<SalesReturn> findById(UUID id) {
+            return Optional.ofNullable(salesReturns.get(id));
+        }
+
+        @Override
+        public Optional<SalesReturn> findByReturnNumber(String returnNumber) {
+            return salesReturns.values().stream().filter(item -> returnNumber.equals(item.getReturnNumber())).findFirst();
+        }
+
+        @Override
+        public List<SalesReturn> findAll() {
+            return salesReturns.values().stream().toList();
+        }
+
+        @Override
+        public List<SalesReturn> findBySalesOrderId(UUID salesOrderId) {
+            return salesReturns.values().stream()
+                    .filter(item -> salesOrderId.equals(item.getSalesOrderId()))
+                    .toList();
+        }
+    }
+
+    private static final class InMemorySalesReturnItemRepository implements SalesReturnItemRepository {
+        private final Map<UUID, List<SalesReturnItem>> itemsByReturnId = new HashMap<>();
+
+        @Override
+        public SalesReturnItem save(SalesReturnItem item) {
+            if (item.getId() == null) {
+                item.setId(UUID.randomUUID());
+            }
+            itemsByReturnId.computeIfAbsent(item.getSalesReturnId(), ignored -> new ArrayList<>()).add(item);
+            return item;
+        }
+
+        @Override
+        public List<SalesReturnItem> findBySalesReturnId(UUID salesReturnId) {
+            return new ArrayList<>(itemsByReturnId.getOrDefault(salesReturnId, List.of()));
         }
     }
 }

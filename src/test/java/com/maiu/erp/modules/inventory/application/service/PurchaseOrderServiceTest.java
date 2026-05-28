@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,11 +22,21 @@ import com.maiu.erp.modules.inventory.domain.enums.PurchaseOrderStatus;
 import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.model.PurchaseOrder;
 import com.maiu.erp.modules.inventory.domain.model.PurchaseOrderItem;
+import com.maiu.erp.modules.inventory.domain.model.PurchaseReturn;
+import com.maiu.erp.modules.inventory.domain.model.PurchaseReturnItem;
+import com.maiu.erp.modules.inventory.domain.model.InventoryStock;
+import com.maiu.erp.modules.inventory.domain.model.StockMovement;
 import com.maiu.erp.modules.inventory.domain.model.Supplier;
+import com.maiu.erp.modules.inventory.domain.model.Warehouse;
+import com.maiu.erp.modules.inventory.domain.repository.InventoryStockRepository;
 import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseOrderRepository;
+import com.maiu.erp.modules.inventory.domain.repository.PurchaseReturnItemRepository;
+import com.maiu.erp.modules.inventory.domain.repository.PurchaseReturnRepository;
+import com.maiu.erp.modules.inventory.domain.repository.StockMovementRepository;
 import com.maiu.erp.modules.inventory.domain.repository.SupplierRepository;
+import com.maiu.erp.modules.inventory.domain.repository.WarehouseRepository;
 import com.maiu.erp.modules.project.domain.model.Project;
 import com.maiu.erp.modules.project.domain.repository.ProjectRepository;
 
@@ -52,7 +63,9 @@ class PurchaseOrderServiceTest {
                 null,
                 productRepository,
                 supplierRepository,
-                projectRepository);
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
 
         UUID purchaseOrderId = purchaseOrderService.createPurchaseOrder(
                 new CreatePurchaseOrderRequest(
@@ -110,7 +123,9 @@ class PurchaseOrderServiceTest {
                 null,
                 productRepository,
                 supplierRepository,
-                projectRepository);
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
 
         purchaseOrderService.approvePurchaseOrder(purchaseOrder.getId());
 
@@ -135,7 +150,9 @@ class PurchaseOrderServiceTest {
                 null,
                 productRepository,
                 supplierRepository,
-                projectRepository);
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -170,7 +187,9 @@ class PurchaseOrderServiceTest {
                 null,
                 productRepository,
                 supplierRepository,
-                projectRepository);
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -208,7 +227,9 @@ class PurchaseOrderServiceTest {
                 null,
                 productRepository,
                 supplierRepository,
-                projectRepository);
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
 
         purchaseOrderService.cancelPurchaseOrder(purchaseOrder.getId());
 
@@ -237,7 +258,9 @@ class PurchaseOrderServiceTest {
                 null,
                 productRepository,
                 supplierRepository,
-                projectRepository);
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
 
         purchaseOrderService.cancelPurchaseOrder(purchaseOrder.getId());
 
@@ -266,7 +289,9 @@ class PurchaseOrderServiceTest {
                 null,
                 productRepository,
                 supplierRepository,
-                projectRepository);
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -297,7 +322,9 @@ class PurchaseOrderServiceTest {
                 null,
                 productRepository,
                 supplierRepository,
-                projectRepository);
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
 
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
@@ -315,6 +342,314 @@ class PurchaseOrderServiceTest {
         assertEquals("Project not found", exception.getMessage());
     }
 
+    @Test
+    void receivePurchaseOrderFailsWhenPerformedByIsBlank() {
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+
+        UUID purchaseOrderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+
+        warehouseRepository.save(activeWarehouse(warehouseId));
+        productRepository.save(activeProduct(productId));
+
+        PurchaseOrder purchaseOrder = new PurchaseOrder();
+        purchaseOrder.setId(purchaseOrderId);
+        purchaseOrder.setPoNumber("PO-TEST-005");
+        purchaseOrder.setStatus(PurchaseOrderStatus.APPROVED);
+        purchaseOrderRepository.save(purchaseOrder);
+
+        PurchaseOrderItem item = new PurchaseOrderItem();
+        item.setId(UUID.randomUUID());
+        item.setPurchaseOrderId(purchaseOrderId);
+        item.setProductId(productId);
+        item.setQuantity(BigDecimal.ONE);
+        item.setUnitCost(BigDecimal.TEN);
+        item.setLineTotal(BigDecimal.TEN);
+        itemRepository.save(item);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
+                purchaseOrderRepository,
+                itemRepository,
+                inventoryService,
+                productRepository,
+                supplierRepository,
+                projectRepository,
+                new InMemoryPurchaseReturnRepository(),
+                new InMemoryPurchaseReturnItemRepository());
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> purchaseOrderService.receivePurchaseOrder(purchaseOrderId, warehouseId, " "));
+
+        assertEquals("performedBy is required", exception.getMessage());
+    }
+
+    @Test
+    void createPurchaseReturnReducesStockAndPersistsReturn() {
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryPurchaseReturnRepository purchaseReturnRepository = new InMemoryPurchaseReturnRepository();
+        InMemoryPurchaseReturnItemRepository purchaseReturnItemRepository = new InMemoryPurchaseReturnItemRepository();
+
+        UUID purchaseOrderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID supplierId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        warehouseRepository.save(activeWarehouse(warehouseId));
+        supplierRepository.save(activeSupplier(supplierId));
+        productRepository.save(activeProduct(productId));
+
+        PurchaseOrder purchaseOrder = new PurchaseOrder();
+        purchaseOrder.setId(purchaseOrderId);
+        purchaseOrder.setPoNumber("PO-TEST-006");
+        purchaseOrder.setSupplierId(supplierId);
+        purchaseOrder.setStatus(PurchaseOrderStatus.RECEIVED);
+        purchaseOrder.setReceivedWarehouseId(warehouseId);
+        purchaseOrderRepository.save(purchaseOrder);
+
+        PurchaseOrderItem item = new PurchaseOrderItem();
+        item.setId(UUID.randomUUID());
+        item.setPurchaseOrderId(purchaseOrderId);
+        item.setProductId(productId);
+        item.setQuantity(new BigDecimal("5.00"));
+        item.setUnitCost(new BigDecimal("10.00"));
+        item.setLineTotal(new BigDecimal("50.00"));
+        itemRepository.save(item);
+
+        InventoryStock stock = new InventoryStock();
+        stock.setProductId(productId);
+        stock.setWarehouseId(warehouseId);
+        stock.setQuantityOnHand(new BigDecimal("5.00"));
+        stock.setReservedQuantity(BigDecimal.ZERO);
+        stock.setReorderLevel(BigDecimal.ZERO);
+        stock.setUpdatedAt(Instant.now());
+        inventoryStockRepository.save(stock);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
+                purchaseOrderRepository,
+                itemRepository,
+                inventoryService,
+                productRepository,
+                supplierRepository,
+                projectRepository,
+                purchaseReturnRepository,
+                purchaseReturnItemRepository);
+
+        UUID purchaseReturnId = purchaseOrderService.createPurchaseReturn(
+                purchaseOrderId,
+                new com.maiu.erp.modules.inventory.application.dto.CreatePurchaseReturnRequest(
+                        "Damaged items",
+                        "warehouse lead",
+                        List.of(new com.maiu.erp.modules.inventory.application.dto.CreatePurchaseReturnItemRequest(
+                                productId,
+                                new BigDecimal("2.00")))));
+
+        PurchaseReturn purchaseReturn = purchaseReturnRepository.findById(purchaseReturnId).orElseThrow();
+        assertEquals(warehouseId, purchaseReturn.getWarehouseId());
+        assertEquals(new BigDecimal("3.00"), inventoryStockRepository.findByProductIdAndWarehouseId(productId, warehouseId)
+                .orElseThrow()
+                .getQuantityOnHand());
+        assertEquals(1, purchaseReturnItemRepository.findByPurchaseReturnId(purchaseReturnId).size());
+    }
+
+    @Test
+    void createPurchaseReturnFailsWhenQuantityExceedsReceivedQuantity() {
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryPurchaseReturnRepository purchaseReturnRepository = new InMemoryPurchaseReturnRepository();
+        InMemoryPurchaseReturnItemRepository purchaseReturnItemRepository = new InMemoryPurchaseReturnItemRepository();
+
+        UUID purchaseOrderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID supplierId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        warehouseRepository.save(activeWarehouse(warehouseId));
+        supplierRepository.save(activeSupplier(supplierId));
+        productRepository.save(activeProduct(productId));
+
+        PurchaseOrder purchaseOrder = new PurchaseOrder();
+        purchaseOrder.setId(purchaseOrderId);
+        purchaseOrder.setPoNumber("PO-TEST-007");
+        purchaseOrder.setSupplierId(supplierId);
+        purchaseOrder.setStatus(PurchaseOrderStatus.RECEIVED);
+        purchaseOrder.setReceivedWarehouseId(warehouseId);
+        purchaseOrderRepository.save(purchaseOrder);
+
+        PurchaseOrderItem item = new PurchaseOrderItem();
+        item.setId(UUID.randomUUID());
+        item.setPurchaseOrderId(purchaseOrderId);
+        item.setProductId(productId);
+        item.setQuantity(new BigDecimal("5.00"));
+        item.setUnitCost(new BigDecimal("10.00"));
+        item.setLineTotal(new BigDecimal("50.00"));
+        itemRepository.save(item);
+
+        InventoryStock stock = new InventoryStock();
+        stock.setProductId(productId);
+        stock.setWarehouseId(warehouseId);
+        stock.setQuantityOnHand(new BigDecimal("5.00"));
+        stock.setReservedQuantity(BigDecimal.ZERO);
+        stock.setReorderLevel(BigDecimal.ZERO);
+        stock.setUpdatedAt(Instant.now());
+        inventoryStockRepository.save(stock);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
+                purchaseOrderRepository,
+                itemRepository,
+                inventoryService,
+                productRepository,
+                supplierRepository,
+                projectRepository,
+                purchaseReturnRepository,
+                purchaseReturnItemRepository);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> purchaseOrderService.createPurchaseReturn(
+                        purchaseOrderId,
+                        new com.maiu.erp.modules.inventory.application.dto.CreatePurchaseReturnRequest(
+                                "Over return",
+                                "warehouse lead",
+                                List.of(new com.maiu.erp.modules.inventory.application.dto.CreatePurchaseReturnItemRequest(
+                                        productId,
+                                        new BigDecimal("6.00"))))));
+
+        assertEquals("Purchase return quantity exceeds received quantity for product", exception.getMessage());
+    }
+
+    @Test
+    void createPurchaseReturnBackfillsReceivedWarehouseFromPurchaseMovements() {
+        InMemoryPurchaseOrderRepository purchaseOrderRepository = new InMemoryPurchaseOrderRepository();
+        InMemoryPurchaseOrderItemRepository itemRepository = new InMemoryPurchaseOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemorySupplierRepository supplierRepository = new InMemorySupplierRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryPurchaseReturnRepository purchaseReturnRepository = new InMemoryPurchaseReturnRepository();
+        InMemoryPurchaseReturnItemRepository purchaseReturnItemRepository = new InMemoryPurchaseReturnItemRepository();
+
+        UUID purchaseOrderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID supplierId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        warehouseRepository.save(activeWarehouse(warehouseId));
+        supplierRepository.save(activeSupplier(supplierId));
+        productRepository.save(activeProduct(productId));
+
+        PurchaseOrder purchaseOrder = new PurchaseOrder();
+        purchaseOrder.setId(purchaseOrderId);
+        purchaseOrder.setPoNumber("PO-LEGACY-001");
+        purchaseOrder.setSupplierId(supplierId);
+        purchaseOrder.setStatus(PurchaseOrderStatus.RECEIVED);
+        purchaseOrderRepository.save(purchaseOrder);
+
+        PurchaseOrderItem item = new PurchaseOrderItem();
+        item.setId(UUID.randomUUID());
+        item.setPurchaseOrderId(purchaseOrderId);
+        item.setProductId(productId);
+        item.setQuantity(new BigDecimal("5.00"));
+        item.setUnitCost(new BigDecimal("10.00"));
+        item.setLineTotal(new BigDecimal("50.00"));
+        itemRepository.save(item);
+
+        InventoryStock stock = new InventoryStock();
+        stock.setProductId(productId);
+        stock.setWarehouseId(warehouseId);
+        stock.setQuantityOnHand(new BigDecimal("5.00"));
+        stock.setReservedQuantity(BigDecimal.ZERO);
+        stock.setReorderLevel(BigDecimal.ZERO);
+        stock.setUpdatedAt(Instant.now());
+        inventoryStockRepository.save(stock);
+
+        StockMovement receiveMovement = new StockMovement();
+        receiveMovement.setProductId(productId);
+        receiveMovement.setWarehouseId(warehouseId);
+        receiveMovement.setQuantity(new BigDecimal("5.00"));
+        receiveMovement.setUnitCost(new BigDecimal("10.00"));
+        receiveMovement.setReferenceType("PURCHASE_ORDER");
+        receiveMovement.setReferenceId(purchaseOrderId);
+        receiveMovement.setMovementDate(Instant.now());
+        receiveMovement.setPerformedBy("warehouse lead");
+        stockMovementRepository.save(receiveMovement);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
+                purchaseOrderRepository,
+                itemRepository,
+                inventoryService,
+                productRepository,
+                supplierRepository,
+                projectRepository,
+                purchaseReturnRepository,
+                purchaseReturnItemRepository,
+                stockMovementRepository);
+
+        UUID purchaseReturnId = purchaseOrderService.createPurchaseReturn(
+                purchaseOrderId,
+                new com.maiu.erp.modules.inventory.application.dto.CreatePurchaseReturnRequest(
+                        "Legacy PO return",
+                        "warehouse lead",
+                        List.of(new com.maiu.erp.modules.inventory.application.dto.CreatePurchaseReturnItemRequest(
+                                productId,
+                                new BigDecimal("1.00")))));
+
+        assertEquals(warehouseId, purchaseOrderRepository.findById(purchaseOrderId).orElseThrow().getReceivedWarehouseId());
+        assertEquals(warehouseId, purchaseReturnRepository.findById(purchaseReturnId).orElseThrow().getWarehouseId());
+    }
+
     private static Product activeProduct(UUID productId) {
         Product product = new Product();
         product.setId(productId);
@@ -329,6 +664,15 @@ class PurchaseOrderServiceTest {
         supplier.setName("Default Supplier");
         supplier.setActive(true);
         return supplier;
+    }
+
+    private static Warehouse activeWarehouse(UUID warehouseId) {
+        Warehouse warehouse = new Warehouse();
+        warehouse.setId(warehouseId);
+        warehouse.setCode("WH-" + warehouseId.toString().substring(0, 8));
+        warehouse.setName("Main Warehouse");
+        warehouse.setActive(true);
+        return warehouse;
     }
 
     private static final class InMemoryPurchaseOrderRepository
@@ -373,6 +717,59 @@ class PurchaseOrderServiceTest {
             return purchaseOrders.values().stream()
                     .filter(order -> projectId.equals(order.getProjectId()))
                     .toList();
+        }
+    }
+
+    private static final class InMemoryPurchaseReturnRepository implements PurchaseReturnRepository {
+        private final Map<UUID, PurchaseReturn> purchaseReturns = new HashMap<>();
+
+        @Override
+        public PurchaseReturn save(PurchaseReturn purchaseReturn) {
+            if (purchaseReturn.getId() == null) {
+                purchaseReturn.setId(UUID.randomUUID());
+            }
+            purchaseReturns.put(purchaseReturn.getId(), purchaseReturn);
+            return purchaseReturn;
+        }
+
+        @Override
+        public Optional<PurchaseReturn> findById(UUID id) {
+            return Optional.ofNullable(purchaseReturns.get(id));
+        }
+
+        @Override
+        public Optional<PurchaseReturn> findByReturnNumber(String returnNumber) {
+            return purchaseReturns.values().stream().filter(item -> returnNumber.equals(item.getReturnNumber())).findFirst();
+        }
+
+        @Override
+        public List<PurchaseReturn> findAll() {
+            return purchaseReturns.values().stream().toList();
+        }
+
+        @Override
+        public List<PurchaseReturn> findByPurchaseOrderId(UUID purchaseOrderId) {
+            return purchaseReturns.values().stream()
+                    .filter(item -> purchaseOrderId.equals(item.getPurchaseOrderId()))
+                    .toList();
+        }
+    }
+
+    private static final class InMemoryPurchaseReturnItemRepository implements PurchaseReturnItemRepository {
+        private final Map<UUID, List<PurchaseReturnItem>> itemsByReturnId = new HashMap<>();
+
+        @Override
+        public PurchaseReturnItem save(PurchaseReturnItem item) {
+            if (item.getId() == null) {
+                item.setId(UUID.randomUUID());
+            }
+            itemsByReturnId.computeIfAbsent(item.getPurchaseReturnId(), ignored -> new ArrayList<>()).add(item);
+            return item;
+        }
+
+        @Override
+        public List<PurchaseReturnItem> findByPurchaseReturnId(UUID purchaseReturnId) {
+            return new ArrayList<>(itemsByReturnId.getOrDefault(purchaseReturnId, List.of()));
         }
     }
 
@@ -531,6 +928,114 @@ class PurchaseOrderServiceTest {
         @Override
         public List<Project> findAll() {
             return projects.values().stream().toList();
+        }
+    }
+
+    private static final class InMemoryInventoryStockRepository implements InventoryStockRepository {
+        private final Map<String, InventoryStock> stocks = new HashMap<>();
+
+        @Override
+        public InventoryStock save(InventoryStock stock) {
+            if (stock.getId() == null) {
+                stock.setId(UUID.randomUUID());
+            }
+            stocks.put(key(stock.getProductId(), stock.getWarehouseId()), stock);
+            return stock;
+        }
+
+        @Override
+        public Optional<InventoryStock> findByProductIdAndWarehouseId(UUID productId, UUID warehouseId) {
+            return Optional.ofNullable(stocks.get(key(productId, warehouseId)));
+        }
+
+        @Override
+        public List<InventoryStock> findByProductId(UUID productId) {
+            return stocks.values().stream().filter(stock -> productId.equals(stock.getProductId())).toList();
+        }
+
+        @Override
+        public List<InventoryStock> findByWarehouseId(UUID warehouseId) {
+            return stocks.values().stream().filter(stock -> warehouseId.equals(stock.getWarehouseId())).toList();
+        }
+
+        private String key(UUID productId, UUID warehouseId) {
+            return productId + ":" + warehouseId;
+        }
+    }
+
+    private static final class InMemoryStockMovementRepository implements StockMovementRepository {
+        private final List<StockMovement> movements = new ArrayList<>();
+
+        @Override
+        public StockMovement save(StockMovement movement) {
+            if (movement.getId() == null) {
+                movement.setId(UUID.randomUUID());
+            }
+            movements.add(movement);
+            return movement;
+        }
+
+        @Override
+        public List<StockMovement> findAll() {
+            return new ArrayList<>(movements);
+        }
+
+        @Override
+        public List<StockMovement> findByProductId(UUID productId) {
+            return movements.stream().filter(movement -> productId.equals(movement.getProductId())).toList();
+        }
+
+        @Override
+        public List<StockMovement> findByWarehouseId(UUID warehouseId) {
+            return movements.stream().filter(movement -> warehouseId.equals(movement.getWarehouseId())).toList();
+        }
+
+        @Override
+        public List<StockMovement> findByProjectId(UUID projectId) {
+            return movements.stream().filter(movement -> projectId.equals(movement.getProjectId())).toList();
+        }
+
+        @Override
+        public List<StockMovement> findByReferenceId(UUID referenceId) {
+            return movements.stream().filter(movement -> referenceId.equals(movement.getReferenceId())).toList();
+        }
+
+        @Override
+        public List<StockMovement> findBetweenDates(Instant start, Instant end) {
+            return movements.stream().toList();
+        }
+    }
+
+    private static final class InMemoryWarehouseRepository implements WarehouseRepository {
+        private final Map<UUID, Warehouse> warehouses = new HashMap<>();
+
+        @Override
+        public Warehouse save(Warehouse warehouse) {
+            if (warehouse.getId() == null) {
+                warehouse.setId(UUID.randomUUID());
+            }
+            warehouses.put(warehouse.getId(), warehouse);
+            return warehouse;
+        }
+
+        @Override
+        public Optional<Warehouse> findById(UUID id) {
+            return Optional.ofNullable(warehouses.get(id));
+        }
+
+        @Override
+        public Optional<Warehouse> findByCode(String code) {
+            return warehouses.values().stream().filter(warehouse -> code.equals(warehouse.getCode())).findFirst();
+        }
+
+        @Override
+        public List<Warehouse> findAll() {
+            return warehouses.values().stream().toList();
+        }
+
+        @Override
+        public List<Warehouse> findActiveWarehouses() {
+            return warehouses.values().stream().filter(warehouse -> Boolean.TRUE.equals(warehouse.getActive())).toList();
         }
     }
 }

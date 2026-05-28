@@ -67,6 +67,17 @@ public class StockMovementRepositoryImpl
     }
 
     @Override
+    public List<StockMovement> findByProjectId(
+            UUID projectId) {
+
+        return jpaRepository
+                .findByProjectId(projectId)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<StockMovement> findByReferenceId(
             UUID referenceId) {
 

@@ -98,6 +98,9 @@ public class PurchaseOrderRepositoryImpl
         po.setProjectId(
                 entity.getProjectId());
 
+        po.setReceivedWarehouseId(
+                entity.getReceivedWarehouseId());
+
         po.setStatus(
                 entity.getStatus());
 
@@ -133,6 +136,9 @@ public class PurchaseOrderRepositoryImpl
 
         entity.setProjectId(
                 purchaseOrder.getProjectId());
+
+        entity.setReceivedWarehouseId(
+                purchaseOrder.getReceivedWarehouseId());
 
         entity.setStatus(
                 purchaseOrder.getStatus());

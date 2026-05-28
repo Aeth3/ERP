@@ -59,4 +59,14 @@ class CategoryControllerTest {
 
         verify(categoryService).deactivateCategory(categoryId);
     }
+
+    @Test
+    void activateCategoryReturnsNoContent() throws Exception {
+        UUID categoryId = UUID.randomUUID();
+
+        mockMvc.perform(post("/inventory/categories/{id}/activate", categoryId))
+                .andExpect(status().isNoContent());
+
+        verify(categoryService).activateCategory(categoryId);
+    }
 }

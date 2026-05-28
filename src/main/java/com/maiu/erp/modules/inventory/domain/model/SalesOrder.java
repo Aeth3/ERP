@@ -10,6 +10,7 @@ public class SalesOrder {
     private UUID id;
     private String soNumber;
     private UUID customerId;
+    private UUID confirmedWarehouseId;
     private SalesOrderStatus status;
     private LocalDate orderDate;
     private BigDecimal totalAmount;
@@ -38,6 +39,10 @@ public class SalesOrder {
         this.customerId = customerId;
     }
 
+    public void setConfirmedWarehouseId(UUID confirmedWarehouseId) {
+        this.confirmedWarehouseId = confirmedWarehouseId;
+    }
+
     public void setOrderDate(LocalDate orderDate) {
         this.orderDate =orderDate;
     }
@@ -52,6 +57,10 @@ public class SalesOrder {
 
     public UUID getCustomerId() {
         return customerId;
+    }
+
+    public UUID getConfirmedWarehouseId() {
+        return confirmedWarehouseId;
     }
 
     public LocalDate getOrderDate() {

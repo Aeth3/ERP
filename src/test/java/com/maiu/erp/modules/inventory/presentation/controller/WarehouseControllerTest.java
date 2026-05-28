@@ -60,4 +60,14 @@ class WarehouseControllerTest {
 
         verify(warehouseService).deactivateWarehouse(warehouseId);
     }
+
+    @Test
+    void activateWarehouseReturnsNoContent() throws Exception {
+        UUID warehouseId = UUID.randomUUID();
+
+        mockMvc.perform(post("/inventory/warehouses/{id}/activate", warehouseId))
+                .andExpect(status().isNoContent());
+
+        verify(warehouseService).activateWarehouse(warehouseId);
+    }
 }

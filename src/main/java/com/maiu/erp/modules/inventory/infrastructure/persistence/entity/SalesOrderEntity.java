@@ -20,6 +20,8 @@ public class SalesOrderEntity {
 
     private UUID customerId;
 
+    private UUID confirmedWarehouseId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SalesOrderStatus status;
@@ -54,6 +56,14 @@ public class SalesOrderEntity {
 
     public void setCustomerId(UUID customerId) {
         this.customerId = customerId;
+    }
+
+    public UUID getConfirmedWarehouseId() {
+        return confirmedWarehouseId;
+    }
+
+    public void setConfirmedWarehouseId(UUID confirmedWarehouseId) {
+        this.confirmedWarehouseId = confirmedWarehouseId;
     }
 
     public SalesOrderStatus getStatus() {

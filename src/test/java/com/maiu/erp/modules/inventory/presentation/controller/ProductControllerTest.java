@@ -102,4 +102,14 @@ class ProductControllerTest {
 
         verify(productService).deactivateProduct(productId);
     }
+
+    @Test
+    void activateProductReturnsNoContent() throws Exception {
+        UUID productId = UUID.randomUUID();
+
+        mockMvc.perform(post("/inventory/products/{id}/activate", productId))
+                .andExpect(status().isNoContent());
+
+        verify(productService).activateProduct(productId);
+    }
 }

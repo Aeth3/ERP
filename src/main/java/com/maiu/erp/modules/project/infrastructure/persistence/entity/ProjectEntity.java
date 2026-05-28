@@ -1,5 +1,6 @@
 package com.maiu.erp.modules.project.infrastructure.persistence.entity;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -36,6 +37,8 @@ public class ProjectEntity {
     private LocalDate startDate;
 
     private LocalDate targetEndDate;
+
+    private BigDecimal budgetAmount;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -99,6 +102,14 @@ public class ProjectEntity {
 
     public void setTargetEndDate(LocalDate targetEndDate) {
         this.targetEndDate = targetEndDate;
+    }
+
+    public BigDecimal getBudgetAmount() {
+        return budgetAmount;
+    }
+
+    public void setBudgetAmount(BigDecimal budgetAmount) {
+        this.budgetAmount = budgetAmount;
     }
 
     public ProjectStatus getStatus() {

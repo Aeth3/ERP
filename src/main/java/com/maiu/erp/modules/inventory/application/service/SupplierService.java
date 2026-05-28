@@ -67,6 +67,13 @@ public class SupplierService {
         supplierRepository.save(supplier);
     }
 
+    public void activateSupplier(
+            UUID supplierId) {
+        Supplier supplier = getSupplierById(supplierId);
+        supplier.setActive(true);
+        supplierRepository.save(supplier);
+    }
+
     public List<Supplier> getSuppliers(boolean activeOnly) {
         return activeOnly
                 ? supplierRepository.findActiveSuppliers()
