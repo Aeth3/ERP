@@ -110,6 +110,11 @@ class WarehouseServiceTest {
         }
 
         @Override
+        public List<InventoryStock> findAll() {
+            return stocks.values().stream().toList();
+        }
+
+        @Override
         public Optional<InventoryStock> findByProductIdAndWarehouseId(UUID productId, UUID warehouseId) {
             return stocks.values().stream()
                     .filter(stock -> productId.equals(stock.getProductId()))

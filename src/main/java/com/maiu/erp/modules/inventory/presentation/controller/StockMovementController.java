@@ -1,5 +1,6 @@
 package com.maiu.erp.modules.inventory.presentation.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,10 +28,23 @@ public class StockMovementController {
     public ResponseEntity<List<StockMovementDto>> getStockMovements(
             @RequestParam(required = false) UUID productId,
             @RequestParam(required = false) UUID warehouseId,
+            @RequestParam(required = false) UUID projectId,
             @RequestParam(required = false) UUID referenceId,
-            @RequestParam(required = false) String referenceType) {
+            @RequestParam(required = false) String referenceType,
+            @RequestParam(required = false) String movementType,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate) {
         return ResponseEntity.ok(
-                inventoryService.getStockMovements(productId, warehouseId, referenceId, referenceType).stream()
+                inventoryService.getStockMovements(
+                                productId,
+                                warehouseId,
+                                projectId,
+                                referenceId,
+                                referenceType,
+                                movementType,
+                                startDate,
+                                endDate)
+                        .stream()
                         .map(this::toDto)
                         .toList());
     }

@@ -80,9 +80,13 @@ public class AuthService {
                 .map(Role::getAuthority)
                 .collect(Collectors.toSet());
 
-        String token = jwtUtil.generateToken(user.getEmail(), roles);
+        Set<String> permissions = user.getRoles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .collect(Collectors.toSet());
 
-        return new AuthDto(user.getId(), token, user.getName(), roles);
+        String token = jwtUtil.generateToken(user.getEmail(), roles, permissions);
+
+        return new AuthDto(user.getId(), token, user.getName(), roles, permissions);
     }
 
     public void confirmEmail(String token) {

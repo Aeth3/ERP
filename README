@@ -24,11 +24,30 @@ $env:SPRING_PROFILES_ACTIVE="dev"
 # seeds a default admin in dev:
 # email: admin@maiu.local
 # password: admin123
+# optional UAT baseline seed:
+# set APP_SEED_UAT_ENABLED=true
+# optional shared tester password:
+# set APP_SEED_UAT_SHARED_PASSWORD=uat123
+# optional admin-only manual reseed endpoint:
+# set APP_SEED_UAT_MANUAL_ENABLED=true
+# seeds:
+# - UAT users for ADMIN / PROJECT_MANAGER / PROCUREMENT / WAREHOUSE / VIEWER
+# - construction-flavored master data
+# - PRJ-UAT-001 with budget lines
+# manual reseed route:
+# POST /admin/uat/seed
 
 # database migrations
 # Flyway is enabled by default
-# dev keeps hibernate update for convenience
-# docker/prod default to hibernate validate + Flyway migrations
+# base/default config now expects hibernate validate
+# dev overrides that to hibernate update for convenience
+# prod startup now refuses:
+# - insecure JWT secret placeholders
+# - ddl-auto values other than validate/none
+# - default admin seeding
+# - UAT baseline seeding
+# - manual UAT seeding
+# - Flyway disabled
 
 # local
 docker compose up -d
@@ -72,6 +91,7 @@ sudo docker run -d -p 8080:8080 \
 # see docs/CONSTRUCTION_CLIENT_PROCESS_FLOW.md
 # see docs/PROJECT_MODULE_PLAN.md
 # see docs/MODULE_IMPLEMENTATION_PLAN.md
+# see docs/UAT_SEED_PLAN.md
 
 # quick secret generation in powershell
 # [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))

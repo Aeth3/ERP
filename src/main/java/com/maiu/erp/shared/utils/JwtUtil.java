@@ -25,10 +25,11 @@ public class JwtUtil {
         this.key = Keys.hmacShaKeyFor(jwtProperties.secret().getBytes());
     }
 
-    public String generateToken(String email, Set<String> roles) {
+    public String generateToken(String email, Set<String> roles, Set<String> permissions) {
         return Jwts.builder()
                 .setSubject(email)
                 .claim("roles", roles)
+                .claim("permissions", permissions)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + 86400000))
                 .signWith(key, SignatureAlgorithm.HS256)
@@ -68,4 +69,18 @@ public class JwtUtil {
 
     return Set.of();
 }
+
+    public Set<String> extractPermissions(String token) {
+        Claims claims = getClaims(token);
+
+        Object permissionsObj = claims.get("permissions");
+
+        if (permissionsObj instanceof List<?> list) {
+            return list.stream()
+                    .map(Object::toString)
+                    .collect(Collectors.toSet());
+        }
+
+        return Set.of();
+    }
 }

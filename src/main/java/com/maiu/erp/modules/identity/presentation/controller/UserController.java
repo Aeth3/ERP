@@ -16,6 +16,7 @@ import com.maiu.erp.modules.identity.domain.model.User;
 
 @RestController
 @RequestMapping("/users")
+@PreAuthorize("hasRole('ADMIN')")
 public class UserController {
 
     private final UserService userService;
@@ -37,7 +38,6 @@ public class UserController {
         return ResponseEntity.ok(userService.getUsers());
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/users/{id}")
     public void deleteUser(@PathVariable Long id) {
         adminService.deleteUser(id);

@@ -42,7 +42,7 @@ APP_DEFAULT_TENANT_ID=1
 APP_SEED_DEFAULT_ADMIN_ENABLED=true
 APP_SEED_DEFAULT_ADMIN_NAME=Default Admin
 APP_SEED_DEFAULT_ADMIN_EMAIL=admin@maiu.local
-APP_SEED_DEFAULT_ADMIN_PASSWORD=admin123
+APP_SEED_DEFAULT_ADMIN_PASSWORD=change-this-local-dev-password
 
 APP_MAIL_FROM=no-reply@maiu.local
 MAIL_HOST=
@@ -128,6 +128,15 @@ Use this split:
 - `ERP/.env.local`: local backend secrets
 - `../.env.compose`: local Docker secrets/config
 - `../.env.compose.prod`: production Docker secrets/config
+
+## Production Guardrails
+
+Production startup now fails fast if any of these are true:
+
+- `JWT_SECRET` is blank or still a placeholder like `change-me`
+- `JPA_DDL_AUTO` is not `validate` or `none`
+- `APP_SEED_DEFAULT_ADMIN_ENABLED=true`
+- `FLYWAY_ENABLED=false`
 
 ## Do Not Commit
 

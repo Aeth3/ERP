@@ -55,7 +55,10 @@ public class UserRepositoryImpl implements UserRepository {
 
     private User toDomain(UserEntity e) {
         Set<Role> roles = e.getRoles().stream()
-                .map(r -> new Role(r.getId(), r.getName(), r.getPermissions()))
+                .map(r -> new Role(
+                        r.getId(),
+                        r.getName(),
+                        r.getPermissions() == null ? Set.of() : Set.copyOf(r.getPermissions())))
                 .collect(Collectors.toSet());
 
         User user = new User(

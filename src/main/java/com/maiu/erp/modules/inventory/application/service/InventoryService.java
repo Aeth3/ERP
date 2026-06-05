@@ -3,6 +3,8 @@ package com.maiu.erp.modules.inventory.application.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -200,39 +202,68 @@ public class InventoryService {
         return inventoryStockRepository.findByWarehouseId(warehouseId);
     }
 
+    public List<InventoryStock> getAllStocks() {
+        return inventoryStockRepository.findAll();
+    }
+
     public List<StockMovement> getStockMovements(
             UUID productId,
             UUID warehouseId,
+            UUID projectId,
             UUID referenceId,
-            String referenceType) {
+            String referenceType,
+            String movementType,
+            LocalDate startDate,
+            LocalDate endDate) {
         if (referenceId == null
                 && productId == null
                 && warehouseId == null
-                && (referenceType == null || referenceType.isBlank())) {
-            throw new BadRequestException("Provide productId, warehouseId, referenceId, or referenceType");
+                && projectId == null
+                && (referenceType == null || referenceType.isBlank())
+                && (movementType == null || movementType.isBlank())
+                && startDate == null
+                && endDate == null) {
+            throw new BadRequestException(
+                    "Provide productId, warehouseId, projectId, referenceId, referenceType, movementType, or a date range");
+        }
+
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new BadRequestException("startDate cannot be after endDate");
         }
 
         List<StockMovement> movements;
         String normalizedReferenceType = referenceType == null
                 ? null
                 : referenceType.trim().toUpperCase();
+        String normalizedMovementType = normalizeMovementType(movementType);
+        Instant rangeStart = startDate == null ? null : startDate.atStartOfDay().toInstant(ZoneOffset.UTC);
+        Instant rangeEndExclusive = endDate == null ? null : endDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
 
         if (referenceId != null) {
             movements = stockMovementRepository.findByReferenceId(referenceId);
         } else if (productId != null) {
             movements = stockMovementRepository.findByProductId(productId);
+        } else if (warehouseId != null) {
+            movements = stockMovementRepository.findByWarehouseId(warehouseId);
+        } else if (projectId != null) {
+            movements = stockMovementRepository.findByProjectId(projectId);
+        } else if (rangeStart != null && rangeEndExclusive != null) {
+            movements = stockMovementRepository.findBetweenDates(rangeStart, rangeEndExclusive.minusNanos(1));
         } else {
-            movements = warehouseId != null
-                    ? stockMovementRepository.findByWarehouseId(warehouseId)
-                    : stockMovementRepository.findAll();
+            movements = stockMovementRepository.findAll();
         }
 
         return movements.stream()
                 .filter(movement -> productId == null || productId.equals(movement.getProductId()))
                 .filter(movement -> warehouseId == null || warehouseId.equals(movement.getWarehouseId()))
+                .filter(movement -> projectId == null || projectId.equals(movement.getProjectId()))
                 .filter(movement -> referenceId == null || referenceId.equals(movement.getReferenceId()))
                 .filter(movement -> normalizedReferenceType == null
                         || normalizedReferenceType.equalsIgnoreCase(movement.getReferenceType()))
+                .filter(movement -> normalizedMovementType == null
+                        || normalizedMovementType.equalsIgnoreCase(movement.getMovementType().name()))
+                .filter(movement -> rangeStart == null || !movement.getMovementDate().isBefore(rangeStart))
+                .filter(movement -> rangeEndExclusive == null || movement.getMovementDate().isBefore(rangeEndExclusive))
                 .sorted(Comparator.comparing(StockMovement::getMovementDate).reversed())
                 .toList();
     }
@@ -556,6 +587,21 @@ public class InventoryService {
         }
 
         return normalized;
+    }
+
+    private String normalizeMovementType(String movementType) {
+        if (movementType == null || movementType.isBlank()) {
+            return null;
+        }
+
+        String normalized = movementType.trim().toUpperCase();
+
+        try {
+            MovementType.valueOf(normalized);
+            return normalized;
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Unknown movementType: " + movementType.trim());
+        }
     }
 
     private String formatAdjustmentRemarks(

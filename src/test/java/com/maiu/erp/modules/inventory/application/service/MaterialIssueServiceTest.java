@@ -688,6 +688,11 @@ class MaterialIssueServiceTest {
         }
 
         @Override
+        public List<InventoryStock> findAll() {
+            return stocks.values().stream().toList();
+        }
+
+        @Override
         public Optional<InventoryStock> findByProductIdAndWarehouseId(UUID productId, UUID warehouseId) {
             return Optional.ofNullable(stocks.get(key(productId, warehouseId)));
         }

@@ -14,6 +14,10 @@ public class RoleBootstrapConfig {
         return args -> {
             defaultRoleService.getOrCreateUserRole();
             defaultRoleService.getOrCreateAdminRole();
+            defaultRoleService.getOrCreateViewerRole();
+            defaultRoleService.getOrCreateProcurementRole();
+            defaultRoleService.getOrCreateWarehouseRole();
+            defaultRoleService.getOrCreateProjectManagerRole();
         };
     }
 }

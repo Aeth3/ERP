@@ -18,6 +18,26 @@ import com.maiu.erp.shared.security.JwtAuthenticationFilter;
 @EnableMethodSecurity
 @Configuration
 public class SecurityConfig {
+        private static final String[] READ_ROLES = {
+                        "USER",
+                        "VIEWER",
+                        "PROCUREMENT",
+                        "WAREHOUSE",
+                        "PROJECT_MANAGER",
+                        "ADMIN"
+        };
+        private static final String[] PROCUREMENT_WRITE_ROLES = {
+                        "PROCUREMENT",
+                        "ADMIN"
+        };
+        private static final String[] WAREHOUSE_WRITE_ROLES = {
+                        "WAREHOUSE",
+                        "ADMIN"
+        };
+        private static final String[] PROJECT_WRITE_ROLES = {
+                        "PROJECT_MANAGER",
+                        "ADMIN"
+        };
 
         private final JwtAuthenticationFilter jwtFilter;
 
@@ -46,8 +66,27 @@ public class SecurityConfig {
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                                                 .requestMatchers("/auth/**").permitAll()
+                                                .requestMatchers("/error").permitAll()
                                                 .requestMatchers("/admin/**").hasRole("ADMIN")
+                                                .requestMatchers("/roles/**").hasRole("ADMIN")
+                                                .requestMatchers("/users/**").hasRole("ADMIN")
                                                 .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")
+                                                .requestMatchers(HttpMethod.GET, "/inventory/**").hasAnyRole(READ_ROLES)
+                                                .requestMatchers(HttpMethod.GET, "/projects/**").hasAnyRole(READ_ROLES)
+                                                .requestMatchers(HttpMethod.GET, "/orders/**").hasAnyRole(READ_ROLES)
+                                                .requestMatchers("/inventory/purchase-orders/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/suppliers/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/customers/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/categories/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/products/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/units/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/material-issues/**").hasAnyRole(WAREHOUSE_WRITE_ROLES)
+                                                .requestMatchers("/inventory/warehouses/**").hasAnyRole(WAREHOUSE_WRITE_ROLES)
+                                                .requestMatchers("/inventory/stocks/**").hasAnyRole(WAREHOUSE_WRITE_ROLES)
+                                                .requestMatchers("/inventory/sales-orders/**").hasAnyRole(WAREHOUSE_WRITE_ROLES)
+                                                .requestMatchers("/projects/**").hasAnyRole(PROJECT_WRITE_ROLES)
+                                                .requestMatchers("/orders/**").hasRole("ADMIN")
+                                                .requestMatchers("/inventory/**").hasRole("ADMIN")
                                                 .anyRequest().authenticated())
 
                                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

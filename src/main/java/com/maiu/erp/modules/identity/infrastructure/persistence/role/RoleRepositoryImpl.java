@@ -4,7 +4,9 @@ import org.springframework.stereotype.Repository;
 
 import com.maiu.erp.modules.identity.domain.repository.RoleRepository;
 
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.maiu.erp.modules.identity.domain.model.Role;
@@ -19,31 +21,35 @@ public class RoleRepositoryImpl implements RoleRepository {
 
     @Override
     public Role save(Role role) {
-        RoleEntity entity = new RoleEntity();
+        RoleEntity entity;
+        if (role.getId() != null) {
+            entity = jpaRepository.findById(role.getId()).orElse(new RoleEntity());
+        } else {
+            entity = jpaRepository.findByNameIgnoreCase(role.getName()).orElse(new RoleEntity());
+        }
         entity.setName(role.getName());
-        entity.setPermissions(role.getPermissions());
+        entity.setPermissions(new LinkedHashSet<>(role.getPermissions()));
         RoleEntity saved = jpaRepository.save(entity);
-        role.setId(saved.getId());
-        return role;
+        return new Role(saved.getId(), saved.getName(), new LinkedHashSet<>(saved.getPermissions()));
     }
 
     @Override
     public List<Role> findAll() {
         return jpaRepository.findAll().stream().map(e -> {
-            return new Role(e.getId(), e.getName(), e.getPermissions());
+            return new Role(e.getId(), e.getName(), new LinkedHashSet<>(e.getPermissions()));
         }).collect(Collectors.toList());
     }
 
     @Override
     public Optional<Role> findById(Long id) {
         return jpaRepository.findById(id).map(e -> {
-            return new Role(e.getId(), e.getName(), e.getPermissions());
+            return new Role(e.getId(), e.getName(), new LinkedHashSet<>(e.getPermissions()));
         });
     }
 
     @Override
     public Optional<Role> findByName(String name) {
         return jpaRepository.findByNameIgnoreCase(name)
-                .map(e -> new Role(e.getId(), e.getName(), e.getPermissions()));
+                .map(e -> new Role(e.getId(), e.getName(), new LinkedHashSet<>(e.getPermissions())));
     }
 }

@@ -7,6 +7,8 @@ public interface InventoryStockRepository  {
 
     InventoryStock save(InventoryStock stock);
 
+    List<InventoryStock> findAll();
+
     Optional<InventoryStock> findByProductIdAndWarehouseId(
             UUID productId,
             UUID warehouseId);

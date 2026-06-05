@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,14 +42,14 @@ class StockMovementControllerTest {
     @Test
     void getStockMovementsReturnsEmptyListWhenNoMatchesExist() throws Exception {
         UUID productId = UUID.randomUUID();
-        when(inventoryService.getStockMovements(productId, null, null, null)).thenReturn(List.of());
+        when(inventoryService.getStockMovements(productId, null, null, null, null, null, null, null)).thenReturn(List.of());
 
         mockMvc.perform(get("/inventory/stock-movements")
                         .param("productId", productId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(content().json("[]"));
 
-        verify(inventoryService).getStockMovements(eq(productId), eq(null), eq(null), eq(null));
+        verify(inventoryService).getStockMovements(eq(productId), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null));
     }
 
     @Test
@@ -58,7 +59,7 @@ class StockMovementControllerTest {
         UUID warehouseId = UUID.randomUUID();
         UUID referenceId = UUID.randomUUID();
 
-        when(inventoryService.getStockMovements(productId, warehouseId, null, null))
+        when(inventoryService.getStockMovements(productId, warehouseId, null, null, null, null, null, null))
                 .thenReturn(List.of(movement(movementId, productId, warehouseId, referenceId)));
 
         mockMvc.perform(get("/inventory/stock-movements")
@@ -76,7 +77,7 @@ class StockMovementControllerTest {
 
     @Test
     void getStockMovementsAcceptsReferenceTypeFilter() throws Exception {
-        when(inventoryService.getStockMovements(null, null, null, "SALES_ORDER"))
+        when(inventoryService.getStockMovements(null, null, null, null, "SALES_ORDER", null, null, null))
                 .thenReturn(List.of());
 
         mockMvc.perform(get("/inventory/stock-movements")
@@ -84,7 +85,39 @@ class StockMovementControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().json("[]"));
 
-        verify(inventoryService).getStockMovements(eq(null), eq(null), eq(null), eq("SALES_ORDER"));
+        verify(inventoryService).getStockMovements(eq(null), eq(null), eq(null), eq(null), eq("SALES_ORDER"), eq(null), eq(null), eq(null));
+    }
+
+    @Test
+    void getStockMovementsAcceptsProjectMovementTypeAndDateFilters() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        when(inventoryService.getStockMovements(
+                null,
+                null,
+                projectId,
+                null,
+                null,
+                "PROJECT_ISSUE",
+                LocalDate.parse("2026-05-01"),
+                LocalDate.parse("2026-05-31"))).thenReturn(List.of());
+
+        mockMvc.perform(get("/inventory/stock-movements")
+                        .param("projectId", projectId.toString())
+                        .param("movementType", "PROJECT_ISSUE")
+                        .param("startDate", "2026-05-01")
+                        .param("endDate", "2026-05-31"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+
+        verify(inventoryService).getStockMovements(
+                eq(null),
+                eq(null),
+                eq(projectId),
+                eq(null),
+                eq(null),
+                eq("PROJECT_ISSUE"),
+                eq(LocalDate.parse("2026-05-01")),
+                eq(LocalDate.parse("2026-05-31")));
     }
 
     private static StockMovement movement(

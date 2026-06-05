@@ -1,7 +1,8 @@
 package com.maiu.erp.modules.identity.infrastructure.persistence.role;
 
 import jakarta.persistence.*;
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "roles")
@@ -14,7 +15,7 @@ public class RoleEntity {
     @ElementCollection
     @CollectionTable(name = "role_permissions", joinColumns = @JoinColumn(name = "role_id"))
     @Column(name = "permission")
-    private Set<String> permissions;
+    private Set<String> permissions = new LinkedHashSet<>();
 
     public void setId(Long id) {
         this.id = id;
@@ -25,7 +26,7 @@ public class RoleEntity {
     }
 
     public void setPermissions(Set<String> permissions) {
-        this.permissions = permissions;
+        this.permissions = permissions == null ? new LinkedHashSet<>() : new LinkedHashSet<>(permissions);
     }
 
     public Long getId() {
@@ -37,6 +38,9 @@ public class RoleEntity {
     }
 
     public Set<String> getPermissions() {
+        if (permissions == null) {
+            permissions = new LinkedHashSet<>();
+        }
         return permissions;
     }
 }

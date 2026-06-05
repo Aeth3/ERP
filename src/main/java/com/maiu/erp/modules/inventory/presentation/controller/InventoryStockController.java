@@ -58,7 +58,10 @@ public class InventoryStockController {
                             .toList());
         }
 
-        throw new BadRequestException("Provide productId, warehouseId, or both");
+        return ResponseEntity.ok(
+                inventoryService.getAllStocks().stream()
+                        .map(this::toDto)
+                        .toList());
     }
 
     @PostMapping("/adjustments")

@@ -37,6 +37,15 @@ public class InventoryStockRepositoryImpl
     }
 
     @Override
+    public List<InventoryStock> findAll() {
+        return jpaRepository
+                .findAll()
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
     public Optional<InventoryStock> findByProductIdAndWarehouseId(
             UUID productId,
             UUID warehouseId) {

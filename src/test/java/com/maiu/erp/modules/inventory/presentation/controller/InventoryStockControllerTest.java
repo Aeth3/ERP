@@ -71,6 +71,21 @@ class InventoryStockControllerTest {
     }
 
     @Test
+    void getStocksReturnsAllStocksWhenNoFilterIsProvided() throws Exception {
+        UUID stockId = UUID.randomUUID();
+        InventoryStock stock = stock(stockId, UUID.randomUUID(), UUID.randomUUID(), "15", "4");
+        when(inventoryService.getAllStocks()).thenReturn(List.of(stock));
+
+        mockMvc.perform(get("/inventory/stocks"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(stockId.toString()))
+                .andExpect(jsonPath("$[0].quantityOnHand").value(15))
+                .andExpect(jsonPath("$[0].reservedQuantity").value(4));
+
+        verify(inventoryService).getAllStocks();
+    }
+
+    @Test
     void createStockAdjustmentReturnsSuccessMessage() throws Exception {
         mockMvc.perform(post("/inventory/stocks/adjustments")
                         .contentType(MediaType.APPLICATION_JSON)

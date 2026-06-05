@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -71,7 +72,11 @@ public class EmailVerificationService {
 
                 This link will expire in 24 hours.
                 """.formatted(verificationUrl));
-        mailSender.send(message);
+        try {
+            mailSender.send(message);
+        } catch (MailException exception) {
+            log.warn("Mail sending failed for {}. Verification link: {}", user.getEmail(), verificationUrl, exception);
+        }
     }
 
     @Transactional

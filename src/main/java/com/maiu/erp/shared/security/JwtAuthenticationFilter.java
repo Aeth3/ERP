@@ -1,6 +1,8 @@
 package com.maiu.erp.shared.security;
 
 import java.io.IOException;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -57,6 +59,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String email = jwtUtil.extractEmail(token);
+        Set<String> tokenRoles = jwtUtil.extractRoles(token);
+        Set<String> tokenPermissions = jwtUtil.extractPermissions(token);
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -65,9 +69,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 user.getTenantId(),
                 user.getEmail(),
                 user.getPassword(),
-                user.getRoles().stream()
-                        .map(role -> new SimpleGrantedAuthority(role.getAuthority()))
-                        .toList());
+                buildAuthorities(tokenRoles, tokenPermissions));
 
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 userDetails,
@@ -77,5 +79,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
+    }
+
+    private java.util.List<SimpleGrantedAuthority> buildAuthorities(Set<String> roles, Set<String> permissions) {
+        Set<String> authorities = new LinkedHashSet<>();
+
+        authorities.addAll(roles);
+        authorities.addAll(permissions);
+
+        return authorities.stream()
+                .map(SimpleGrantedAuthority::new)
+                .toList();
     }
 }
