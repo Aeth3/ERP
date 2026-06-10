@@ -46,12 +46,18 @@ class PurchaseOrderReportControllerTest {
                 LocalDate.of(2026, 6, 30),
                 "APPROVED",
                 projectId,
-                supplierId))
+                supplierId,
+                1,
+                5))
                 .thenReturn(new PurchaseOrderReportSummaryDto(
                         LocalDate.of(2026, 6, 1),
                         LocalDate.of(2026, 6, 30),
                         1,
                         new BigDecimal("250.00"),
+                        1,
+                        5,
+                        1,
+                        1,
                         List.of(new PurchaseOrderReportItemDto(
                                 UUID.randomUUID(),
                                 "PO-123",
@@ -77,10 +83,14 @@ class PurchaseOrderReportControllerTest {
                         .param("endDate", "2026-06-30")
                         .param("status", "APPROVED")
                         .param("projectId", projectId.toString())
-                        .param("supplierId", supplierId.toString()))
+                        .param("supplierId", supplierId.toString())
+                        .param("page", "1")
+                        .param("size", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalOrders").value(1))
                 .andExpect(jsonPath("$.totalAmount").value(250.00))
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.size").value(5))
                 .andExpect(jsonPath("$.orders[0].supplierName").value("Build Supply"))
                 .andExpect(jsonPath("$.orders[0].projectCode").value("PRJ-001"));
 
@@ -89,6 +99,8 @@ class PurchaseOrderReportControllerTest {
                 eq(LocalDate.of(2026, 6, 30)),
                 eq("APPROVED"),
                 eq(projectId),
-                eq(supplierId));
+                eq(supplierId),
+                eq(1),
+                eq(5));
     }
 }

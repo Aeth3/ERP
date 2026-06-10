@@ -9,10 +9,17 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
 
 import com.maiu.erp.shared.security.CustomAccessDeniedHandler;
 import com.maiu.erp.shared.security.CustomAuthenticationEntryPoint;
 import com.maiu.erp.shared.security.JwtAuthenticationFilter;
+
+
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -68,22 +75,34 @@ public class SecurityConfig {
                                                 .requestMatchers("/auth/**").permitAll()
                                                 .requestMatchers("/error").permitAll()
                                                 .requestMatchers("/admin/**").hasRole("ADMIN")
+                                                .requestMatchers(HttpMethod.GET, "/approvals/**").hasAnyRole(READ_ROLES)
+                                                .requestMatchers("/approvals/**").hasRole("ADMIN")
                                                 .requestMatchers("/roles/**").hasRole("ADMIN")
                                                 .requestMatchers("/users/**").hasRole("ADMIN")
                                                 .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")
                                                 .requestMatchers(HttpMethod.GET, "/inventory/**").hasAnyRole(READ_ROLES)
                                                 .requestMatchers(HttpMethod.GET, "/projects/**").hasAnyRole(READ_ROLES)
                                                 .requestMatchers(HttpMethod.GET, "/orders/**").hasAnyRole(READ_ROLES)
-                                                .requestMatchers("/inventory/purchase-orders/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
-                                                .requestMatchers("/inventory/suppliers/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
-                                                .requestMatchers("/inventory/customers/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
-                                                .requestMatchers("/inventory/categories/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
-                                                .requestMatchers("/inventory/products/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
-                                                .requestMatchers("/inventory/units/**").hasAnyRole(PROCUREMENT_WRITE_ROLES)
-                                                .requestMatchers("/inventory/material-issues/**").hasAnyRole(WAREHOUSE_WRITE_ROLES)
-                                                .requestMatchers("/inventory/warehouses/**").hasAnyRole(WAREHOUSE_WRITE_ROLES)
-                                                .requestMatchers("/inventory/stocks/**").hasAnyRole(WAREHOUSE_WRITE_ROLES)
-                                                .requestMatchers("/inventory/sales-orders/**").hasAnyRole(WAREHOUSE_WRITE_ROLES)
+                                                .requestMatchers("/inventory/purchase-orders/**")
+                                                .hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/suppliers/**")
+                                                .hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/customers/**")
+                                                .hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/categories/**")
+                                                .hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/products/**")
+                                                .hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/units/**")
+                                                .hasAnyRole(PROCUREMENT_WRITE_ROLES)
+                                                .requestMatchers("/inventory/material-issues/**")
+                                                .hasAnyRole(WAREHOUSE_WRITE_ROLES)
+                                                .requestMatchers("/inventory/warehouses/**")
+                                                .hasAnyRole(WAREHOUSE_WRITE_ROLES)
+                                                .requestMatchers("/inventory/stocks/**")
+                                                .hasAnyRole(WAREHOUSE_WRITE_ROLES)
+                                                .requestMatchers("/inventory/sales-orders/**")
+                                                .hasAnyRole(WAREHOUSE_WRITE_ROLES)
                                                 .requestMatchers("/projects/**").hasAnyRole(PROJECT_WRITE_ROLES)
                                                 .requestMatchers("/orders/**").hasRole("ADMIN")
                                                 .requestMatchers("/inventory/**").hasRole("ADMIN")
@@ -92,5 +111,32 @@ public class SecurityConfig {
                                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
                 return http.build();
+        }
+
+        @Bean
+        public CorsConfigurationSource corsConfigurationSource() {
+                CorsConfiguration configuration = new CorsConfiguration();
+
+                configuration.setAllowedOrigins(List.of(
+                                "http://localhost:3000",
+                                "https://erp.maiu.top"));
+
+                configuration.setAllowedMethods(List.of(
+                                "GET",
+                                "POST",
+                                "PUT",
+                                "PATCH",
+                                "DELETE",
+                                "OPTIONS"));
+
+                configuration.setAllowedHeaders(List.of("*"));
+                configuration.setExposedHeaders(List.of("Authorization"));
+                configuration.setAllowCredentials(true);
+
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+
+                source.registerCorsConfiguration("/**", configuration);
+
+                return source;
         }
 }

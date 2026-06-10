@@ -45,12 +45,18 @@ class SalesOrderReportControllerTest {
                 LocalDate.of(2026, 6, 30),
                 "CONFIRMED",
                 customerId,
-                warehouseId))
+                warehouseId,
+                0,
+                10))
                 .thenReturn(new SalesOrderReportSummaryDto(
                         LocalDate.of(2026, 6, 1),
                         LocalDate.of(2026, 6, 30),
                         1,
                         new BigDecimal("180.00"),
+                        0,
+                        10,
+                        1,
+                        1,
                         List.of(new SalesOrderReportItemDto(
                                 UUID.randomUUID(),
                                 "SO-123",
@@ -71,10 +77,14 @@ class SalesOrderReportControllerTest {
                         .param("endDate", "2026-06-30")
                         .param("status", "CONFIRMED")
                         .param("customerId", customerId.toString())
-                        .param("warehouseId", warehouseId.toString()))
+                        .param("warehouseId", warehouseId.toString())
+                        .param("page", "0")
+                        .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalOrders").value(1))
                 .andExpect(jsonPath("$.totalAmount").value(180.00))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(10))
                 .andExpect(jsonPath("$.orders[0].customerName").value("Acme Client"))
                 .andExpect(jsonPath("$.orders[0].confirmedWarehouseCode").value("WH-001"));
 
@@ -83,6 +93,8 @@ class SalesOrderReportControllerTest {
                 eq(LocalDate.of(2026, 6, 30)),
                 eq("CONFIRMED"),
                 eq(customerId),
-                eq(warehouseId));
+                eq(warehouseId),
+                eq(0),
+                eq(10));
     }
 }

@@ -7,9 +7,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import com.maiu.erp.modules.inventory.domain.repository.CustomerRepository;
+import com.maiu.erp.modules.identity.application.security.PermissionCatalog;
 import com.maiu.erp.modules.project.application.dto.CreateProjectRequest;
 import com.maiu.erp.modules.project.application.dto.UpdateProjectRequest;
 import com.maiu.erp.modules.project.domain.enums.ProjectStatus;
@@ -82,7 +84,12 @@ public class ProjectService {
         projectRepository.save(project);
     }
 
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.PROJECT_MANAGE + "')")
     public void activateProject(UUID projectId) {
+        finalizeProjectActivation(projectId);
+    }
+
+    public void finalizeProjectActivation(UUID projectId) {
         changeStatus(projectId, ProjectStatus.ACTIVE);
     }
 

@@ -170,17 +170,22 @@ class PurchaseOrderReportQueryServiceTest {
                 salesOrderRepository,
                 salesOrderItemRepository,
                 salesReturnRepository,
-                customerRepository);
+                customerRepository,
+                stockMovementRepository);
 
         var report = service.getPurchaseOrderReport(
                 LocalDate.of(2026, 6, 1),
                 LocalDate.of(2026, 6, 30),
                 "APPROVED",
                 projectId,
-                supplierId);
+                supplierId,
+                0,
+                20);
 
         assertEquals(1, report.getTotalOrders());
         assertEquals(new BigDecimal("250.00"), report.getTotalAmount());
+        assertEquals(0, report.getPage());
+        assertEquals(20, report.getSize());
         assertEquals("Build Supply", report.getOrders().getFirst().getSupplierName());
         assertEquals("PRJ-001", report.getOrders().getFirst().getProjectCode());
         assertEquals("WH-001", report.getOrders().getFirst().getReceivedWarehouseCode());

@@ -143,6 +143,53 @@ class SalesOrderServiceTest {
     }
 
     @Test
+    void confirmSalesOrderFailsWhenStockRowDoesNotExist() {
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemorySalesOrderRepository salesOrderRepository = new InMemorySalesOrderRepository();
+        InMemorySalesOrderItemRepository salesOrderItemRepository = new InMemorySalesOrderItemRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryCustomerRepository customerRepository = new InMemoryCustomerRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID salesOrderId = UUID.randomUUID();
+
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(activeWarehouse(warehouseId));
+        salesOrderRepository.save(salesOrder(salesOrderId, SalesOrderStatus.DRAFT));
+        salesOrderItemRepository.save(salesOrderItem(salesOrderId, productId, "3", "12.50"));
+
+        InventoryValidationService validationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                validationService);
+        SalesOrderService salesOrderService = new SalesOrderService(
+                salesOrderRepository,
+                salesOrderItemRepository,
+                inventoryService,
+                validationService,
+                productRepository,
+                customerRepository,
+                new InMemorySalesReturnRepository(),
+                new InMemorySalesReturnItemRepository());
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> salesOrderService.confirmSalesOrder(salesOrderId, warehouseId));
+
+        assertEquals("Insufficient available stock", exception.getMessage());
+        assertEquals(
+                SalesOrderStatus.DRAFT,
+                salesOrderRepository.findById(salesOrderId).orElseThrow().getStatus());
+    }
+
+    @Test
     void shipSalesOrderConsumesReservedStockAndRecordsMovement() {
         InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
         InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();

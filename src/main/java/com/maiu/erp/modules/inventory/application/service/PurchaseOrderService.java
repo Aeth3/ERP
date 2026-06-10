@@ -8,8 +8,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
+import com.maiu.erp.modules.identity.application.security.PermissionCatalog;
 import com.maiu.erp.modules.inventory.application.dto.CreatePurchaseOrderItemRequest;
 import com.maiu.erp.modules.inventory.application.dto.CreatePurchaseOrderRequest;
 import com.maiu.erp.modules.inventory.application.dto.CreatePurchaseReturnItemRequest;
@@ -148,7 +150,14 @@ public class PurchaseOrderService {
     }
 
     @Transactional
+    @PreAuthorize("hasAuthority('" + PermissionCatalog.PROCUREMENT_MANAGE + "')")
     public void approvePurchaseOrder(
+            UUID purchaseOrderId) {
+        finalizePurchaseOrderApproval(purchaseOrderId);
+    }
+
+    @Transactional
+    public void finalizePurchaseOrderApproval(
             UUID purchaseOrderId) {
         PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(purchaseOrderId)
                 .orElseThrow(() -> new NotFoundException("PO not found"));

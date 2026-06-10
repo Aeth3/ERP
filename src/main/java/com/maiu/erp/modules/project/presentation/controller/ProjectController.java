@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.maiu.erp.modules.approval.application.dto.ApproveApprovalRequestRequest;
+import com.maiu.erp.modules.approval.application.dto.CreateApprovalRequestRequest;
+import com.maiu.erp.modules.approval.application.service.ApprovalWorkflowService;
+import com.maiu.erp.modules.approval.domain.enums.ApprovalRequestType;
 import com.maiu.erp.modules.project.application.dto.ActionResponse;
 import com.maiu.erp.modules.project.application.dto.CreateProjectRequest;
 import com.maiu.erp.modules.project.application.dto.CreateProjectBudgetLineRequest;
@@ -22,8 +26,10 @@ import com.maiu.erp.modules.project.application.dto.ProjectDto;
 import com.maiu.erp.modules.project.application.dto.UpdateProjectRequest;
 import com.maiu.erp.modules.project.application.service.ProjectBudgetService;
 import com.maiu.erp.modules.project.application.service.ProjectService;
+import com.maiu.erp.modules.project.domain.enums.ProjectStatus;
 import com.maiu.erp.modules.project.domain.model.ProjectBudgetLine;
 import com.maiu.erp.modules.project.domain.model.Project;
+import com.maiu.erp.shared.exception.BadRequestException;
 
 import jakarta.validation.Valid;
 
@@ -32,10 +38,15 @@ import jakarta.validation.Valid;
 public class ProjectController {
     private final ProjectService projectService;
     private final ProjectBudgetService projectBudgetService;
+    private final ApprovalWorkflowService approvalWorkflowService;
 
-    public ProjectController(ProjectService projectService, ProjectBudgetService projectBudgetService) {
+    public ProjectController(
+            ProjectService projectService,
+            ProjectBudgetService projectBudgetService,
+            ApprovalWorkflowService approvalWorkflowService) {
         this.projectService = projectService;
         this.projectBudgetService = projectBudgetService;
+        this.approvalWorkflowService = approvalWorkflowService;
     }
 
     @PostMapping
@@ -91,9 +102,30 @@ public class ProjectController {
     }
 
     @PostMapping("/{id}/activate")
-    public ResponseEntity<ActionResponse> activateProject(@PathVariable UUID id) {
-        projectService.activateProject(id);
+    public ResponseEntity<ActionResponse> activateProject(
+            @PathVariable UUID id,
+            @RequestBody(required = false) ApproveApprovalRequestRequest request) {
+        Project project = projectService.getProjectById(id);
+        if (project.getStatus() == ProjectStatus.DRAFT) {
+            if (request == null) {
+                throw new BadRequestException("approvedBy is required");
+            }
+            UUID approvalRequestId = approvalWorkflowService
+                    .getPendingApprovalRequestByTarget(ApprovalRequestType.PROJECT_ACTIVATION, id)
+                    .getId();
+            approvalWorkflowService.approveApprovalRequest(approvalRequestId, request.approvedBy());
+        } else {
+            projectService.activateProject(id);
+        }
         return ResponseEntity.ok(new ActionResponse("Project activated successfully"));
+    }
+
+    @PostMapping("/{id}/activation-request")
+    public ResponseEntity<ActionResponse> requestProjectActivation(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateApprovalRequestRequest request) {
+        approvalWorkflowService.requestProjectActivation(id, request.requestedBy(), request.remarks());
+        return ResponseEntity.ok(new ActionResponse("Project activation approval requested successfully"));
     }
 
     @PostMapping("/{id}/hold")

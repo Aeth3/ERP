@@ -40,7 +40,7 @@ public class InventoryValidationService {
 
         InventoryStock stock = inventoryStockRepository
                 .findByProductIdAndWarehouseId(productId, warehouseId)
-                .orElseThrow(() -> new NotFoundException("Stock not found"));
+                .orElseThrow(() -> new BadRequestException("Insufficient available stock"));
 
         BigDecimal availableQuantity = stock.getQuantityOnHand()
                 .subtract(stock.getReservedQuantity());

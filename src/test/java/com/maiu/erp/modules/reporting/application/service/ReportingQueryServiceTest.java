@@ -209,7 +209,8 @@ class ReportingQueryServiceTest {
                 salesOrderRepository,
                 salesOrderItemRepository,
                 salesReturnRepository,
-                customerRepository);
+                customerRepository,
+                stockMovementRepository);
 
         ReportingOverviewDto overview = service.getOverview(
                 LocalDate.of(2026, 6, 1),

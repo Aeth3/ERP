@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.maiu.erp.modules.approval.application.dto.ApproveApprovalRequestRequest;
+import com.maiu.erp.modules.approval.application.dto.CreateApprovalRequestRequest;
+import com.maiu.erp.modules.approval.application.service.ApprovalWorkflowService;
+import com.maiu.erp.modules.approval.domain.enums.ApprovalRequestType;
 import com.maiu.erp.modules.inventory.application.dto.ActionResponse;
 import com.maiu.erp.modules.inventory.application.dto.CreatePurchaseOrderRequest;
 import com.maiu.erp.modules.inventory.application.dto.CreatePurchaseReturnRequest;
@@ -33,9 +37,13 @@ import jakarta.validation.Valid;
 public class PurchaseOrderController {
 
     private final PurchaseOrderService purchaseOrderService;
+    private final ApprovalWorkflowService approvalWorkflowService;
 
-    public PurchaseOrderController(PurchaseOrderService purchaseOrderService) {
+    public PurchaseOrderController(
+            PurchaseOrderService purchaseOrderService,
+            ApprovalWorkflowService approvalWorkflowService) {
         this.purchaseOrderService = purchaseOrderService;
+        this.approvalWorkflowService = approvalWorkflowService;
     }
 
     @PostMapping
@@ -61,10 +69,22 @@ public class PurchaseOrderController {
                 toDto(purchaseOrderService.getPurchaseOrderById(id)));
     }
 
+    @PostMapping("/{id}/approval-request")
+    public ResponseEntity<ActionResponse> requestPurchaseOrderApproval(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateApprovalRequestRequest request) {
+        approvalWorkflowService.requestPurchaseOrderApproval(id, request.requestedBy(), request.remarks());
+        return ResponseEntity.ok(new ActionResponse("Purchase order approval requested successfully"));
+    }
+
     @PostMapping("/{id}/approve")
     public ResponseEntity<ActionResponse> approvePurchaseOrder(
-            @PathVariable UUID id) {
-        purchaseOrderService.approvePurchaseOrder(id);
+            @PathVariable UUID id,
+            @Valid @RequestBody ApproveApprovalRequestRequest request) {
+        UUID approvalRequestId = approvalWorkflowService
+                .getPendingApprovalRequestByTarget(ApprovalRequestType.PURCHASE_ORDER_APPROVAL, id)
+                .getId();
+        approvalWorkflowService.approveApprovalRequest(approvalRequestId, request.approvedBy());
 
         return ResponseEntity.ok(
                 new ActionResponse("Purchase order approved successfully"));

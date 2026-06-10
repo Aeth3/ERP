@@ -26,6 +26,8 @@ public final class PermissionCatalog {
     public static final String PROJECT_MANAGE = "project.manage";
     public static final String PROJECT_BUDGET_MANAGE = "project.budget.manage";
     public static final String PROJECT_REPORT_READ = "project.report.read";
+    public static final String APPROVAL_READ = "approval.read";
+    public static final String APPROVAL_MANAGE = "approval.manage";
 
     public static final String UAT_SEED_MANAGE = "uat.seed.manage";
 
@@ -48,6 +50,8 @@ public final class PermissionCatalog {
                 PROJECT_MANAGE,
                 PROJECT_BUDGET_MANAGE,
                 PROJECT_REPORT_READ,
+                APPROVAL_READ,
+                APPROVAL_MANAGE,
                 UAT_SEED_MANAGE);
     }
 
@@ -71,6 +75,7 @@ public final class PermissionCatalog {
                 INVENTORY_READ,
                 PROCUREMENT_MANAGE,
                 MASTER_DATA_MANAGE,
+                APPROVAL_READ,
                 PROJECT_READ,
                 PROJECT_REPORT_READ);
     }
@@ -93,6 +98,7 @@ public final class PermissionCatalog {
                 PROJECT_READ,
                 PROJECT_MANAGE,
                 PROJECT_BUDGET_MANAGE,
+                APPROVAL_READ,
                 PROJECT_REPORT_READ);
     }
 

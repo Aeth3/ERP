@@ -4,36 +4,36 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-public class PurchaseOrderReportSummaryDto {
+public class StockMovementReportSummaryDto {
     private final LocalDate startDate;
     private final LocalDate endDate;
-    private final Integer totalOrders;
-    private final BigDecimal totalAmount;
+    private final int totalMovements;
+    private final BigDecimal totalQuantity;
     private final int page;
     private final int size;
     private final long totalElements;
     private final int totalPages;
-    private final List<PurchaseOrderReportItemDto> orders;
+    private final List<ReportMovementItemDto> movements;
 
-    public PurchaseOrderReportSummaryDto(
+    public StockMovementReportSummaryDto(
             LocalDate startDate,
             LocalDate endDate,
-            Integer totalOrders,
-            BigDecimal totalAmount,
+            int totalMovements,
+            BigDecimal totalQuantity,
             int page,
             int size,
             long totalElements,
             int totalPages,
-            List<PurchaseOrderReportItemDto> orders) {
+            List<ReportMovementItemDto> movements) {
         this.startDate = startDate;
         this.endDate = endDate;
-        this.totalOrders = totalOrders;
-        this.totalAmount = totalAmount;
+        this.totalMovements = totalMovements;
+        this.totalQuantity = totalQuantity;
         this.page = page;
         this.size = size;
         this.totalElements = totalElements;
         this.totalPages = totalPages;
-        this.orders = orders;
+        this.movements = movements;
     }
 
     public LocalDate getStartDate() {
@@ -44,12 +44,12 @@ public class PurchaseOrderReportSummaryDto {
         return endDate;
     }
 
-    public Integer getTotalOrders() {
-        return totalOrders;
+    public int getTotalMovements() {
+        return totalMovements;
     }
 
-    public BigDecimal getTotalAmount() {
-        return totalAmount;
+    public BigDecimal getTotalQuantity() {
+        return totalQuantity;
     }
 
     public int getPage() {
@@ -68,7 +68,7 @@ public class PurchaseOrderReportSummaryDto {
         return totalPages;
     }
 
-    public List<PurchaseOrderReportItemDto> getOrders() {
-        return orders;
+    public List<ReportMovementItemDto> getMovements() {
+        return movements;
     }
 }

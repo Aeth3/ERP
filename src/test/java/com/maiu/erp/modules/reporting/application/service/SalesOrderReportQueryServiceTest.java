@@ -148,17 +148,22 @@ class SalesOrderReportQueryServiceTest {
                 salesOrderRepository,
                 salesOrderItemRepository,
                 salesReturnRepository,
-                customerRepository);
+                customerRepository,
+                stockMovementRepository);
 
         var report = service.getSalesOrderReport(
                 LocalDate.of(2026, 6, 1),
                 LocalDate.of(2026, 6, 30),
                 "CONFIRMED",
                 customerId,
-                warehouseId);
+                warehouseId,
+                0,
+                20);
 
         assertEquals(1, report.getTotalOrders());
         assertEquals(new BigDecimal("180.00"), report.getTotalAmount());
+        assertEquals(0, report.getPage());
+        assertEquals(20, report.getSize());
         assertEquals("Acme Client", report.getOrders().getFirst().getCustomerName());
         assertEquals("WH-001", report.getOrders().getFirst().getConfirmedWarehouseCode());
         assertEquals(2, report.getOrders().getFirst().getItemCount());

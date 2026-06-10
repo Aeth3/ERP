@@ -17,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.maiu.erp.modules.approval.application.service.ApprovalWorkflowService;
 import com.maiu.erp.modules.inventory.application.service.PurchaseOrderService;
 import com.maiu.erp.shared.exception.GlobalExceptionHandler;
 
@@ -24,12 +25,14 @@ class PurchaseOrderControllerTest {
 
     private MockMvc mockMvc;
     private PurchaseOrderService purchaseOrderService;
+    private ApprovalWorkflowService approvalWorkflowService;
 
     @BeforeEach
     void setUp() {
         purchaseOrderService = Mockito.mock(PurchaseOrderService.class);
+        approvalWorkflowService = Mockito.mock(ApprovalWorkflowService.class);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new PurchaseOrderController(purchaseOrderService))
+                .standaloneSetup(new PurchaseOrderController(purchaseOrderService, approvalWorkflowService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -65,11 +68,22 @@ class PurchaseOrderControllerTest {
     void approvePurchaseOrderReturnsSuccessMessage() throws Exception {
         UUID purchaseOrderId = UUID.randomUUID();
 
-        mockMvc.perform(post("/inventory/purchase-orders/{id}/approve", purchaseOrderId))
+        when(approvalWorkflowService.getPendingApprovalRequestByTarget(any(), eq(purchaseOrderId)))
+                .thenReturn(new com.maiu.erp.modules.approval.domain.model.ApprovalRequest() {{
+                    setId(UUID.randomUUID());
+                }});
+
+        mockMvc.perform(post("/inventory/purchase-orders/{id}/approve", purchaseOrderId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "approvedBy": "Admin User"
+                                }
+                                """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Purchase order approved successfully"));
 
-        verify(purchaseOrderService).approvePurchaseOrder(eq(purchaseOrderId));
+        verify(approvalWorkflowService).approveApprovalRequest(any(), eq("Admin User"));
     }
 
     @Test
