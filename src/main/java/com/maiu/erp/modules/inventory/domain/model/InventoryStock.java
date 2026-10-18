@@ -11,6 +11,7 @@ public class InventoryStock {
     private BigDecimal quantityOnHand;
     private BigDecimal reservedQuantity;
     private BigDecimal reorderLevel;
+    private BigDecimal averageCost;
     private Instant updatedAt;
 
     public void setProductId(UUID productId) {
@@ -67,5 +68,13 @@ public class InventoryStock {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public BigDecimal getAverageCost() {
+        return averageCost;
+    }
+
+    public void setAverageCost(BigDecimal averageCost) {
+        this.averageCost = averageCost;
     }
 }

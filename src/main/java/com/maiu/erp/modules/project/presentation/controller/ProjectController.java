@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.maiu.erp.modules.approval.application.dto.ApproveApprovalRequestRequest;
 import com.maiu.erp.modules.approval.application.dto.CreateApprovalRequestRequest;
 import com.maiu.erp.modules.approval.application.service.ApprovalWorkflowService;
 import com.maiu.erp.modules.approval.domain.enums.ApprovalRequestType;
@@ -29,7 +28,6 @@ import com.maiu.erp.modules.project.application.service.ProjectService;
 import com.maiu.erp.modules.project.domain.enums.ProjectStatus;
 import com.maiu.erp.modules.project.domain.model.ProjectBudgetLine;
 import com.maiu.erp.modules.project.domain.model.Project;
-import com.maiu.erp.shared.exception.BadRequestException;
 
 import jakarta.validation.Valid;
 
@@ -103,17 +101,13 @@ public class ProjectController {
 
     @PostMapping("/{id}/activate")
     public ResponseEntity<ActionResponse> activateProject(
-            @PathVariable UUID id,
-            @RequestBody(required = false) ApproveApprovalRequestRequest request) {
+            @PathVariable UUID id) {
         Project project = projectService.getProjectById(id);
         if (project.getStatus() == ProjectStatus.DRAFT) {
-            if (request == null) {
-                throw new BadRequestException("approvedBy is required");
-            }
             UUID approvalRequestId = approvalWorkflowService
                     .getPendingApprovalRequestByTarget(ApprovalRequestType.PROJECT_ACTIVATION, id)
                     .getId();
-            approvalWorkflowService.approveApprovalRequest(approvalRequestId, request.approvedBy());
+            approvalWorkflowService.approveApprovalRequest(approvalRequestId);
         } else {
             projectService.activateProject(id);
         }
@@ -123,8 +117,8 @@ public class ProjectController {
     @PostMapping("/{id}/activation-request")
     public ResponseEntity<ActionResponse> requestProjectActivation(
             @PathVariable UUID id,
-            @Valid @RequestBody CreateApprovalRequestRequest request) {
-        approvalWorkflowService.requestProjectActivation(id, request.requestedBy(), request.remarks());
+            @RequestBody(required = false) CreateApprovalRequestRequest request) {
+        approvalWorkflowService.requestProjectActivation(id, request == null ? null : request.remarks());
         return ResponseEntity.ok(new ActionResponse("Project activation approval requested successfully"));
     }
 
@@ -143,6 +137,8 @@ public class ProjectController {
     @PostMapping("/{id}/cancel")
     public ResponseEntity<ActionResponse> cancelProject(@PathVariable UUID id) {
         projectService.cancelProject(id);
+        approvalWorkflowService.cancelPendingRequest(
+                ApprovalRequestType.PROJECT_ACTIVATION, id, "Project was cancelled");
         return ResponseEntity.ok(new ActionResponse("Project cancelled successfully"));
     }
 

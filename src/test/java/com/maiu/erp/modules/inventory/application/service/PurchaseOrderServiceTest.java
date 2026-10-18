@@ -127,7 +127,7 @@ class PurchaseOrderServiceTest {
                 new InMemoryPurchaseReturnRepository(),
                 new InMemoryPurchaseReturnItemRepository());
 
-        purchaseOrderService.approvePurchaseOrder(purchaseOrder.getId());
+        purchaseOrderService.finalizePurchaseOrderApproval(purchaseOrder.getId());
 
         assertEquals(
                 PurchaseOrderStatus.APPROVED,

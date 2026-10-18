@@ -12,7 +12,7 @@ public record CreateMaterialIssueItemRequest(
         @NotNull(message = "quantity is required")
         @DecimalMin(value = "0.0000001", message = "quantity must be greater than zero")
         BigDecimal quantity,
-        @NotNull(message = "unitCost is required")
+        // Optional: used only when the warehouse has no average cost for the product yet.
         @DecimalMin(value = "0.0", inclusive = true, message = "unitCost must be zero or greater")
         BigDecimal unitCost) {
 }

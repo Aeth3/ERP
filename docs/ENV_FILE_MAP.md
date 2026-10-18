@@ -12,13 +12,13 @@ Suggested contents:
 SPRING_PROFILES_ACTIVE=dev
 
 APP_NAME=maiu
-DB_URL=jdbc:mysql://localhost:3306/maiu_db
-DB_USERNAME=root
+DB_URL=jdbc:postgresql://localhost:5432/maiu_db
+DB_USERNAME=postgres
 DB_PASSWORD=
 
 JPA_DDL_AUTO=update
 JPA_SHOW_SQL=true
-JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQLDialect
+JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
 JPA_FORMAT_SQL=true
 
 FLYWAY_ENABLED=true
@@ -82,12 +82,13 @@ Use this for local Docker Compose runs from the workspace root.
 Suggested contents:
 
 ```env
-MYSQL_ROOT_PASSWORD=your-local-docker-db-password
-MYSQL_DATABASE=erp_db_docker
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your-local-docker-db-password
+POSTGRES_DB=erp_db_docker
 
 SPRING_PROFILES_ACTIVE=docker
-SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/erp_db_docker?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-SPRING_DATASOURCE_USERNAME=root
+SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/erp_db_docker
+SPRING_DATASOURCE_USERNAME=postgres
 SPRING_DATASOURCE_PASSWORD=your-local-docker-db-password
 
 JPA_DDL_AUTO=validate
@@ -107,7 +108,7 @@ Suggested contents:
 
 ```env
 SPRING_PROFILES_ACTIVE=prod
-SPRING_DATASOURCE_URL=jdbc:mysql://your-prod-host:3306/erp_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+SPRING_DATASOURCE_URL=jdbc:postgresql://your-prod-host:5432/erp_db
 SPRING_DATASOURCE_USERNAME=your-prod-db-user
 SPRING_DATASOURCE_PASSWORD=your-prod-db-password
 
@@ -137,6 +138,11 @@ Production startup now fails fast if any of these are true:
 - `JPA_DDL_AUTO` is not `validate` or `none`
 - `APP_SEED_DEFAULT_ADMIN_ENABLED=true`
 - `FLYWAY_ENABLED=false`
+
+For the first migration to a brand-new empty PostgreSQL database, use either:
+
+- a one-time bootstrap with `JPA_DDL_AUTO=update`, then switch back to `validate`
+- or a future full baseline Flyway migration for the entire schema
 
 ## Do Not Commit
 

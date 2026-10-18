@@ -5,7 +5,7 @@ This checklist covers the credentials and secrets that have been used by the ERP
 ## Rotate Immediately
 
 - `DB_PASSWORD`
-- `MYSQL_ROOT_PASSWORD`
+- `POSTGRES_PASSWORD`
 - `SPRING_DATASOURCE_PASSWORD`
 - `JWT_SECRET`
 - any production database password currently referenced in deployment files or shell history
@@ -33,7 +33,7 @@ Check these files from the workspace root and replace old values:
 
 Recommended values to update:
 
-- `MYSQL_ROOT_PASSWORD`
+- `POSTGRES_PASSWORD`
 - `SPRING_DATASOURCE_PASSWORD`
 - `JWT_SECRET`
 
@@ -86,7 +86,7 @@ Confirm these still work:
 Use these searches to find leftovers:
 
 ```powershell
-rg "DB_PASSWORD|JWT_SECRET|MYSQL_ROOT_PASSWORD|SPRING_DATASOURCE_PASSWORD" d:\Projects\maiu
+rg "DB_PASSWORD|JWT_SECRET|POSTGRES_PASSWORD|SPRING_DATASOURCE_PASSWORD" d:\Projects\maiu
 ```
 
 ```powershell

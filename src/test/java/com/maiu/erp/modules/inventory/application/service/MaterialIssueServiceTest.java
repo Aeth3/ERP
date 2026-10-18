@@ -103,6 +103,75 @@ class MaterialIssueServiceTest {
     }
 
     @Test
+    void stockIsCostedAtWeightedAverageThroughReceiptIssueAndTransfer() {
+        InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
+        InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        UUID projectId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID siteWarehouseId = UUID.randomUUID();
+
+        projectRepository.save(activeProject(projectId));
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(warehouse(warehouseId));
+        warehouseRepository.save(warehouse(siteWarehouseId));
+        InventoryStock openingStock = stock(productId, warehouseId, "10", "0");
+        openingStock.setAverageCost(new BigDecimal("10.0000"));
+        inventoryStockRepository.save(openingStock);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        MaterialIssueService materialIssueService = new MaterialIssueService(
+                materialIssueRepository,
+                materialIssueItemRepository,
+                new InMemoryMaterialReturnRepository(),
+                new InMemoryMaterialReturnItemRepository(),
+                inventoryService,
+                inventoryValidationService,
+                projectRepository);
+
+        // 10 @ 10.00 on hand + 10 received @ 20.00 = 20 @ 15.00
+        inventoryService.increaseStock(
+                productId, warehouseId, new BigDecimal("10"), new BigDecimal("20.00"),
+                "PURCHASE_ORDER", UUID.randomUUID(), "receiver");
+        assertEquals(new BigDecimal("15.0000"),
+                inventoryStockRepository.findByProductIdAndWarehouseId(productId, warehouseId)
+                        .orElseThrow().getAverageCost());
+
+        // The issue ignores the typed cost and uses the average.
+        UUID issueId = materialIssueService.createMaterialIssue(new CreateMaterialIssueRequest(
+                projectId,
+                warehouseId,
+                "Slab pour",
+                "foreman",
+                List.of(new CreateMaterialIssueItemRequest(productId, new BigDecimal("4"), new BigDecimal("12.50")))));
+        MaterialIssueItem item = materialIssueItemRepository.findByMaterialIssueId(issueId).getFirst();
+        assertEquals(new BigDecimal("15.00"), item.getUnitCost());
+        assertEquals(new BigDecimal("60.00"), item.getLineTotal());
+
+        // A transfer carries the average into an empty warehouse.
+        inventoryService.transferStock(
+                productId, warehouseId, siteWarehouseId, new BigDecimal("6"), null,
+                "Site delivery", null, "storekeeper");
+        InventoryStock siteStock = inventoryStockRepository.findByProductIdAndWarehouseId(productId, siteWarehouseId)
+                .orElseThrow();
+        assertEquals(new BigDecimal("6"), siteStock.getQuantityOnHand());
+        assertEquals(new BigDecimal("15.0000"), siteStock.getAverageCost());
+    }
+
+    @Test
     void createMaterialIssueFailsWhenProjectIsNotActive() {
         InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
         InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
@@ -523,6 +592,117 @@ class MaterialIssueServiceTest {
                         new ReverseMaterialIssueRequest(null, "warehouse lead")));
 
         assertEquals("Material issue is already fully reversed or returned", exception.getMessage());
+    }
+
+    @Test
+    void partialMaterialReturnsRefundExactIssuedCost() {
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
+        UUID productId = UUID.randomUUID();
+        UUID issueId = UUID.randomUUID();
+        MaterialIssueService materialIssueService = serviceWithUnevenIssue(
+                issueId,
+                productId,
+                materialReturnRepository,
+                materialReturnItemRepository);
+
+        for (int i = 0; i < 3; i++) {
+            materialIssueService.createMaterialReturn(issueId, new CreateMaterialReturnRequest(
+                    null,
+                    "storekeeper",
+                    List.of(new CreateMaterialReturnItemRequest(productId, BigDecimal.ONE))));
+        }
+
+        assertEquals(new BigDecimal("10.00"), totalReturnedCost(issueId, materialReturnRepository, materialReturnItemRepository));
+    }
+
+    @Test
+    void reverseMaterialIssueAfterPartialReturnRefundsExactIssuedCost() {
+        InMemoryMaterialReturnRepository materialReturnRepository = new InMemoryMaterialReturnRepository();
+        InMemoryMaterialReturnItemRepository materialReturnItemRepository = new InMemoryMaterialReturnItemRepository();
+        UUID productId = UUID.randomUUID();
+        UUID issueId = UUID.randomUUID();
+        MaterialIssueService materialIssueService = serviceWithUnevenIssue(
+                issueId,
+                productId,
+                materialReturnRepository,
+                materialReturnItemRepository);
+
+        materialIssueService.createMaterialReturn(issueId, new CreateMaterialReturnRequest(
+                null,
+                "storekeeper",
+                List.of(new CreateMaterialReturnItemRequest(productId, BigDecimal.ONE))));
+        materialIssueService.reverseMaterialIssue(issueId, new ReverseMaterialIssueRequest(null, "warehouse lead"));
+
+        assertEquals(new BigDecimal("10.00"), totalReturnedCost(issueId, materialReturnRepository, materialReturnItemRepository));
+    }
+
+    private static MaterialIssueService serviceWithUnevenIssue(
+            UUID issueId,
+            UUID productId,
+            InMemoryMaterialReturnRepository materialReturnRepository,
+            InMemoryMaterialReturnItemRepository materialReturnItemRepository) {
+        InMemoryMaterialIssueRepository materialIssueRepository = new InMemoryMaterialIssueRepository();
+        InMemoryMaterialIssueItemRepository materialIssueItemRepository = new InMemoryMaterialIssueItemRepository();
+        InMemoryInventoryStockRepository inventoryStockRepository = new InMemoryInventoryStockRepository();
+        InMemoryStockMovementRepository stockMovementRepository = new InMemoryStockMovementRepository();
+        InMemoryProductRepository productRepository = new InMemoryProductRepository();
+        InMemoryWarehouseRepository warehouseRepository = new InMemoryWarehouseRepository();
+        InMemoryProjectRepository projectRepository = new InMemoryProjectRepository();
+
+        UUID projectId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+
+        projectRepository.save(activeProject(projectId));
+        productRepository.save(activeProduct(productId));
+        warehouseRepository.save(warehouse(warehouseId));
+        inventoryStockRepository.save(stock(productId, warehouseId, "7", "0"));
+
+        MaterialIssue issue = new MaterialIssue();
+        issue.setId(issueId);
+        issue.setIssueNumber("MI-0005");
+        issue.setProjectId(projectId);
+        issue.setWarehouseId(warehouseId);
+        issue.setPerformedBy("foreman");
+        issue.setIssuedAt(Instant.now());
+        materialIssueRepository.save(issue);
+
+        // 3 units for 10.00 total: the per-unit cost (3.333...) does not round evenly.
+        MaterialIssueItem issuedItem = new MaterialIssueItem();
+        issuedItem.setId(UUID.randomUUID());
+        issuedItem.setMaterialIssueId(issueId);
+        issuedItem.setProductId(productId);
+        issuedItem.setQuantity(new BigDecimal("3"));
+        issuedItem.setUnitCost(new BigDecimal("3.3333"));
+        issuedItem.setLineTotal(new BigDecimal("10.00"));
+        materialIssueItemRepository.save(issuedItem);
+
+        InventoryValidationService inventoryValidationService = new InventoryValidationService(
+                inventoryStockRepository,
+                productRepository,
+                warehouseRepository);
+        InventoryService inventoryService = new InventoryService(
+                inventoryStockRepository,
+                stockMovementRepository,
+                inventoryValidationService);
+        return new MaterialIssueService(
+                materialIssueRepository,
+                materialIssueItemRepository,
+                materialReturnRepository,
+                materialReturnItemRepository,
+                inventoryService,
+                inventoryValidationService,
+                projectRepository);
+    }
+
+    private static BigDecimal totalReturnedCost(
+            UUID issueId,
+            InMemoryMaterialReturnRepository materialReturnRepository,
+            InMemoryMaterialReturnItemRepository materialReturnItemRepository) {
+        return materialReturnRepository.findByMaterialIssueId(issueId).stream()
+                .flatMap(materialReturn -> materialReturnItemRepository.findByMaterialReturnId(materialReturn.getId()).stream())
+                .map(MaterialReturnItem::getLineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static Project activeProject(UUID projectId) {

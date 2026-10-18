@@ -58,6 +58,18 @@ public class InventoryStockRepositoryImpl
     }
 
     @Override
+    public Optional<InventoryStock> findByProductIdAndWarehouseIdForUpdate(
+            UUID productId,
+            UUID warehouseId) {
+
+        return jpaRepository
+                .findByProductIdAndWarehouseIdForUpdate(
+                        productId,
+                        warehouseId)
+                .map(this::toDomain);
+    }
+
+    @Override
     public List<InventoryStock> findByProductId(
             UUID productId) {
 
@@ -97,6 +109,9 @@ public class InventoryStockRepositoryImpl
         stock.setReorderLevel(
                 entity.getReorderLevel());
 
+        stock.setAverageCost(
+                entity.getAverageCost());
+
         stock.setUpdatedAt(
                 entity.getUpdatedAt());
 
@@ -124,6 +139,11 @@ public class InventoryStockRepositoryImpl
         entity.setReorderLevel(
                 stock.getReorderLevel() != null
                         ? stock.getReorderLevel()
+                        : BigDecimal.ZERO);
+
+        entity.setAverageCost(
+                stock.getAverageCost() != null
+                        ? stock.getAverageCost()
                         : BigDecimal.ZERO);
 
         entity.setUpdatedAt(

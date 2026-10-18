@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.maiu.erp.modules.approval.application.service.ApprovalWorkflowService;
+import com.maiu.erp.modules.approval.domain.enums.ApprovalRequestType;
 import com.maiu.erp.modules.inventory.application.service.PurchaseOrderService;
 import com.maiu.erp.shared.exception.GlobalExceptionHandler;
 
@@ -65,14 +66,16 @@ class PurchaseOrderControllerTest {
     }
 
     @Test
-    void approvePurchaseOrderReturnsSuccessMessage() throws Exception {
+    void approvePurchaseOrderIgnoresClientSuppliedApprover() throws Exception {
         UUID purchaseOrderId = UUID.randomUUID();
+        UUID approvalRequestId = UUID.randomUUID();
 
         when(approvalWorkflowService.getPendingApprovalRequestByTarget(any(), eq(purchaseOrderId)))
                 .thenReturn(new com.maiu.erp.modules.approval.domain.model.ApprovalRequest() {{
-                    setId(UUID.randomUUID());
+                    setId(approvalRequestId);
                 }});
 
+        // Older clients still send approvedBy; it is accepted but no longer used.
         mockMvc.perform(post("/inventory/purchase-orders/{id}/approve", purchaseOrderId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -83,11 +86,11 @@ class PurchaseOrderControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Purchase order approved successfully"));
 
-        verify(approvalWorkflowService).approveApprovalRequest(any(), eq("Admin User"));
+        verify(approvalWorkflowService).approveApprovalRequest(eq(approvalRequestId));
     }
 
     @Test
-    void cancelPurchaseOrderReturnsSuccessMessage() throws Exception {
+    void cancelPurchaseOrderClosesPendingApprovalRequest() throws Exception {
         UUID purchaseOrderId = UUID.randomUUID();
 
         mockMvc.perform(post("/inventory/purchase-orders/{id}/cancel", purchaseOrderId))
@@ -95,6 +98,8 @@ class PurchaseOrderControllerTest {
                 .andExpect(jsonPath("$.message").value("Purchase order cancelled successfully"));
 
         verify(purchaseOrderService).cancelPurchaseOrder(eq(purchaseOrderId));
+        verify(approvalWorkflowService).cancelPendingRequest(
+                eq(ApprovalRequestType.PURCHASE_ORDER_APPROVAL), eq(purchaseOrderId), any());
     }
 
     @Test
