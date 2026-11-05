@@ -32,6 +32,8 @@ public final class PermissionCatalog {
     public static final String FINANCE_READ = "finance.read";
     public static final String FINANCE_JOURNAL_MANAGE = "finance.journal.manage";
     public static final String FINANCE_PERIOD_MANAGE = "finance.period.manage";
+    public static final String FINANCE_AP_READ = "finance.ap.read";
+    public static final String FINANCE_AP_MANAGE = "finance.ap.manage";
 
     public static final String UAT_SEED_MANAGE = "uat.seed.manage";
 
@@ -59,6 +61,8 @@ public final class PermissionCatalog {
                 FINANCE_READ,
                 FINANCE_JOURNAL_MANAGE,
                 FINANCE_PERIOD_MANAGE,
+                FINANCE_AP_READ,
+                FINANCE_AP_MANAGE,
                 UAT_SEED_MANAGE);
     }
 
@@ -114,6 +118,8 @@ public final class PermissionCatalog {
                 FINANCE_READ,
                 FINANCE_JOURNAL_MANAGE,
                 FINANCE_PERIOD_MANAGE,
+                FINANCE_AP_READ,
+                FINANCE_AP_MANAGE,
                 INVENTORY_READ,
                 PROJECT_READ,
                 PROJECT_REPORT_READ);
