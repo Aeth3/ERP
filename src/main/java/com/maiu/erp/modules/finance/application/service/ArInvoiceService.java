@@ -139,6 +139,13 @@ public class ArInvoiceService {
                     throw new BadRequestException(
                             "Invoice " + invoice.getInvoiceNumber() + " has receipts and cannot be cancelled");
                 }
+                if (invoice.getKind() == InvoiceKind.PROGRESS_BILLING
+                        && releasableRetention(invoice.getProjectId(), invoice.getId())
+                                .compareTo(BigDecimal.ZERO) < 0) {
+                    throw new BadRequestException(
+                            "Invoice " + invoice.getInvoiceNumber()
+                                    + " has retention that was already released; cancel the retention release first");
+                }
                 ledgerPostingService.reverse(
                         invoice.getJournalEntryId(),
                         LocalDate.now(businessZone),
@@ -273,22 +280,22 @@ public class ArInvoiceService {
         List<JournalLine> lines = new ArrayList<>();
         switch (invoice.getKind()) {
             case SALES_ORDER -> {
-                lines.add(journalLine(mappedAccount(AccountMappingKey.ACCOUNTS_RECEIVABLE), invoice.getTotal(), null));
-                lines.add(journalLine(mappedAccount(AccountMappingKey.SALES_REVENUE), null, invoice.getTotal()));
+                addNonZeroLine(lines, AccountMappingKey.ACCOUNTS_RECEIVABLE, invoice.getTotal(), null);
+                addNonZeroLine(lines, AccountMappingKey.SALES_REVENUE, null, invoice.getTotal());
             }
             case PROGRESS_BILLING -> {
-                lines.add(journalLine(mappedAccount(AccountMappingKey.ACCOUNTS_RECEIVABLE), invoice.getTotal(), null));
-                if (invoice.getRetentionAmount() != null && invoice.getRetentionAmount().signum() > 0) {
-                    lines.add(journalLine(
-                            mappedAccount(AccountMappingKey.RETENTION_RECEIVABLE), invoice.getRetentionAmount(), null));
-                }
-                lines.add(journalLine(mappedAccount(AccountMappingKey.CONTRACT_REVENUE), null, invoice.getSubtotal()));
+                addNonZeroLine(lines, AccountMappingKey.ACCOUNTS_RECEIVABLE, invoice.getTotal(), null);
+                addNonZeroLine(lines, AccountMappingKey.RETENTION_RECEIVABLE, invoice.getRetentionAmount(), null);
+                addNonZeroLine(lines, AccountMappingKey.CONTRACT_REVENUE, null, invoice.getSubtotal());
             }
             case RETENTION_RELEASE -> {
-                lines.add(journalLine(mappedAccount(AccountMappingKey.ACCOUNTS_RECEIVABLE), invoice.getTotal(), null));
-                lines.add(journalLine(
-                        mappedAccount(AccountMappingKey.RETENTION_RECEIVABLE), null, invoice.getTotal()));
+                addNonZeroLine(lines, AccountMappingKey.ACCOUNTS_RECEIVABLE, invoice.getTotal(), null);
+                addNonZeroLine(lines, AccountMappingKey.RETENTION_RECEIVABLE, null, invoice.getTotal());
             }
+        }
+        if (lines.isEmpty()) {
+            throw new BadRequestException(
+                    "Invoice " + invoice.getInvoiceNumber() + " has a zero total and cannot be posted");
         }
 
         JournalEntry draft = new JournalEntry();
@@ -299,6 +306,16 @@ public class ArInvoiceService {
         draft.setCreatedBy(CurrentActor.name());
         draft.setLines(lines);
         return draft;
+    }
+
+    /** Zero-amount journal lines are omitted; a null or zero debit/credit adds nothing. */
+    private void addNonZeroLine(List<JournalLine> lines, AccountMappingKey key, BigDecimal debit, BigDecimal credit) {
+        boolean hasDebit = debit != null && debit.signum() > 0;
+        boolean hasCredit = credit != null && credit.signum() > 0;
+        if (!hasDebit && !hasCredit) {
+            return;
+        }
+        lines.add(journalLine(mappedAccount(key), hasDebit ? debit : null, hasCredit ? credit : null));
     }
 
     private JournalLine journalLine(UUID accountId, BigDecimal debit, BigDecimal credit) {
@@ -495,6 +512,9 @@ public class ArInvoiceService {
             }
             if (line.amount() == null || line.amount().signum() <= 0) {
                 throw new BadRequestException("Billing amount must be positive");
+            }
+            if (line.description() == null || line.description().isBlank()) {
+                throw new BadRequestException("A progress billing line needs a description");
             }
             requireMoneyScale(line.amount(), "amount");
         }

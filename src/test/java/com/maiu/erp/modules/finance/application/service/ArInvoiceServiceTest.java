@@ -550,6 +550,58 @@ class ArInvoiceServiceTest {
         assertThrows(BadRequestException.class, () -> service.approve(secondDraft.getId()));
     }
 
+    // --- review fix-pass regressions ---
+
+    @Test
+    void cancelBillingRejectedWhenRetentionAlreadyReleased() {
+        ProjectFixture project = activeProject("10000.00", "10.00");
+        Invoice billing = service.createDraft(progressRequest(project, "1000.00"));
+        service.approve(billing.getId());
+        Invoice release = service.releaseRetention(project.projectId(), INVOICE_DATE, null);
+        service.approve(release.getId());
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.cancel(billing.getId()));
+        assertTrue(ex.getMessage().toLowerCase().contains("retention"));
+
+        // Cancelling the release first restores the path.
+        service.cancel(release.getId());
+        assertEquals(InvoiceStatus.CANCELLED, service.cancel(billing.getId()).getStatus());
+    }
+
+    @Test
+    void approvesFullRetentionBillingOmittingZeroArLine() {
+        ProjectFixture project = activeProject("10000.00", "100.00");
+        Invoice invoice = service.createDraft(progressRequest(project, "500.00"));
+
+        Invoice approved = service.approve(invoice.getId());
+
+        JournalEntry entry = journalEntryRepository.findById(approved.getJournalEntryId()).orElseThrow();
+        UUID arAccountId = accountIds.get(AccountMappingKey.ACCOUNTS_RECEIVABLE);
+        assertTrue(entry.getLines().stream().noneMatch(line -> arAccountId.equals(line.getAccountId())));
+        assertEquals(new BigDecimal("500.00"), debit(entry, AccountMappingKey.RETENTION_RECEIVABLE));
+        assertEquals(new BigDecimal("500.00"), credit(entry, AccountMappingKey.CONTRACT_REVENUE));
+    }
+
+    @Test
+    void zeroTotalSalesOrderInvoiceGetsClearErrorOnApprove() {
+        SoFixture so = shippedSo("10.00", "25.00");
+        Invoice invoice = service.createDraft(soRequest(so, List.of(
+                new LineReq(so.itemId(), new BigDecimal("1.00"), new BigDecimal("0.00"), null, null))));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.approve(invoice.getId()));
+        assertTrue(ex.getMessage().contains(invoice.getInvoiceNumber()));
+    }
+
+    @Test
+    void rejectsProgressBillingWithoutDescription() {
+        ProjectFixture project = activeProject("10000.00", "10.00");
+        CreateInvoiceRequest request = new CreateInvoiceRequest(
+                InvoiceKind.PROGRESS_BILLING, project.customerId(), null, project.projectId(), INVOICE_DATE, null,
+                null, List.of(new LineReq(null, null, null, new BigDecimal("100.00"), "   ")));
+
+        assertThrows(BadRequestException.class, () -> service.createDraft(request));
+    }
+
     // --- helpers ---
 
     private BigDecimal debit(JournalEntry entry, AccountMappingKey key) {
