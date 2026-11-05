@@ -69,7 +69,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
@@ -132,7 +133,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
@@ -199,7 +201,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
@@ -251,7 +254,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
@@ -322,7 +326,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
@@ -396,7 +401,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
@@ -483,7 +489,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
@@ -575,7 +582,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         MaterialIssueService materialIssueService = new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,
@@ -684,7 +692,8 @@ class MaterialIssueServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         return new MaterialIssueService(
                 materialIssueRepository,
                 materialIssueItemRepository,

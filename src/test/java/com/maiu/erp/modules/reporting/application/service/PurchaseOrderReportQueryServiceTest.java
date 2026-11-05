@@ -146,7 +146,8 @@ class PurchaseOrderReportQueryServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         ProjectService projectService = new ProjectService(projectRepository, customerRepository);
         ProjectCostQueryService projectCostQueryService = new ProjectCostQueryService(
                 projectService,

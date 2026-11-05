@@ -64,7 +64,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -116,7 +117,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -168,7 +170,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -206,7 +209,9 @@ class SalesOrderServiceTest {
 
         productRepository.save(activeProduct(productId));
         warehouseRepository.save(activeWarehouse(warehouseId));
-        inventoryStockRepository.save(stock(productId, warehouseId, "10", "4"));
+        InventoryStock costedStock = stock(productId, warehouseId, "10", "4");
+        costedStock.setAverageCost(new BigDecimal("9.5000"));
+        inventoryStockRepository.save(costedStock);
         SalesOrder confirmedOrder = salesOrder(salesOrderId, SalesOrderStatus.CONFIRMED);
         confirmedOrder.setConfirmedWarehouseId(warehouseId);
         salesOrderRepository.save(confirmedOrder);
@@ -219,7 +224,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -243,7 +249,8 @@ class SalesOrderServiceTest {
         assertEquals(BigDecimal.ZERO, updatedStock.getReservedQuantity());
         assertEquals(SalesOrderStatus.SHIPPED, updatedOrder.getStatus());
         assertEquals(MovementType.SALES_OUT, movement.getMovementType());
-        assertEquals(new BigDecimal("15.00"), movement.getUnitCost());
+        // The shipment is valued at average cost; the 15.00 selling price stays on the order line.
+        assertEquals(new BigDecimal("9.5000"), movement.getUnitCost());
         assertEquals(salesOrderId, movement.getReferenceId());
         assertEquals(performedBy, movement.getPerformedBy());
     }
@@ -279,7 +286,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -328,7 +336,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -381,7 +390,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -436,7 +446,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -485,7 +496,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -540,7 +552,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -602,7 +615,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,
@@ -673,7 +687,8 @@ class SalesOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                validationService);
+                validationService,
+                event -> { });
         SalesOrderService salesOrderService = new SalesOrderService(
                 salesOrderRepository,
                 salesOrderItemRepository,

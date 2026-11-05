@@ -12,6 +12,8 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.maiu.erp.modules.inventory.application.port.InventoryLedgerEvent;
+import com.maiu.erp.modules.inventory.application.port.InventoryLedgerPoster;
 import com.maiu.erp.modules.inventory.domain.enums.MovementType;
 import com.maiu.erp.modules.inventory.domain.model.InventoryStock;
 import com.maiu.erp.modules.inventory.domain.model.StockMovement;
@@ -30,15 +32,18 @@ public class InventoryService {
     private final InventoryStockRepository inventoryStockRepository;
     private final StockMovementRepository stockMovementRepository;
     private final InventoryValidationService inventoryValidationService;
+    private final InventoryLedgerPoster inventoryLedgerPoster;
 
     public InventoryService(
             InventoryStockRepository inventoryStockRepository,
             StockMovementRepository stockMovementRepository,
-            InventoryValidationService inventoryValidationService) {
+            InventoryValidationService inventoryValidationService,
+            InventoryLedgerPoster inventoryLedgerPoster) {
 
         this.inventoryStockRepository = inventoryStockRepository;
         this.stockMovementRepository = stockMovementRepository;
         this.inventoryValidationService = inventoryValidationService;
+        this.inventoryLedgerPoster = inventoryLedgerPoster;
     }
 
     @Transactional
@@ -75,15 +80,15 @@ public class InventoryService {
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
 
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.PURCHASE_RECEIPT, stockMovementRepository.save(movement));
     }
 
+    /** Ships stock out for a sale. The movement is valued at average cost; the price stays on the order line. */
     @Transactional
     public void decreaseStock(
             UUID productId,
             UUID warehouseId,
             BigDecimal quantity,
-            BigDecimal unitCost,
             String referenceType,
             UUID referenceId,
             String performedBy) {
@@ -100,6 +105,7 @@ public class InventoryService {
 
         BigDecimal reservedToConsume = stock.getReservedQuantity()
                 .min(quantity);
+        BigDecimal shipmentUnitCost = currentAverageCost(stock);
 
         stock.setQuantityOnHand(
                 stock.getQuantityOnHand().subtract(quantity));
@@ -115,12 +121,12 @@ public class InventoryService {
         movement.setMovementType(MovementType.SALES_OUT);
         movement.setProjectId(null);
         movement.setQuantity(quantity);
-        movement.setUnitCost(unitCost);
+        movement.setUnitCost(shipmentUnitCost);
         movement.setReferenceType(referenceType);
         movement.setReferenceId(referenceId);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.SALES_SHIPMENT, stockMovementRepository.save(movement));
     }
 
     @Transactional
@@ -326,7 +332,11 @@ public class InventoryService {
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
 
-        stockMovementRepository.save(movement);
+        postToLedger(
+                "DECREASE".equals(normalizedAdjustmentType)
+                        ? InventoryLedgerEvent.Kind.ADJUSTMENT_DECREASE
+                        : InventoryLedgerEvent.Kind.ADJUSTMENT_INCREASE,
+                stockMovementRepository.save(movement));
     }
 
     @Transactional
@@ -454,7 +464,7 @@ public class InventoryService {
         movement.setRemarks(remarks);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.PROJECT_ISSUE, stockMovementRepository.save(movement));
         return issueUnitCost;
     }
 
@@ -490,7 +500,7 @@ public class InventoryService {
         movement.setRemarks(remarks);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.PROJECT_RETURN, stockMovementRepository.save(movement));
     }
 
     @Transactional
@@ -532,15 +542,15 @@ public class InventoryService {
         movement.setRemarks(remarks);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.PURCHASE_RETURN, stockMovementRepository.save(movement));
     }
 
+    /** Takes sold stock back in at the current average cost; the average itself is unchanged. */
     @Transactional
     public void receiveSalesReturn(
             UUID productId,
             UUID warehouseId,
             BigDecimal quantity,
-            BigDecimal unitPrice,
             UUID referenceId,
             String remarks,
             String performedBy) {
@@ -559,13 +569,13 @@ public class InventoryService {
         movement.setProjectId(null);
         movement.setMovementType(MovementType.RETURN);
         movement.setQuantity(quantity);
-        movement.setUnitCost(unitPrice == null ? BigDecimal.ZERO : unitPrice.setScale(2, RoundingMode.HALF_UP));
+        movement.setUnitCost(currentAverageCost(stock));
         movement.setReferenceType("SALES_RETURN");
         movement.setReferenceId(referenceId);
         movement.setRemarks(remarks);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.SALES_RETURN, stockMovementRepository.save(movement));
     }
 
     private InventoryStock getStockForUpdate(
@@ -592,6 +602,21 @@ public class InventoryService {
                     newStock.setUpdatedAt(Instant.now());
                     return newStock;
                 });
+    }
+
+    private void postToLedger(InventoryLedgerEvent.Kind kind, StockMovement savedMovement) {
+        inventoryLedgerPoster.post(new InventoryLedgerEvent(
+                kind,
+                savedMovement.getId(),
+                savedMovement.getReferenceId(),
+                savedMovement.getProductId(),
+                savedMovement.getWarehouseId(),
+                savedMovement.getProjectId(),
+                savedMovement.getQuantity(),
+                savedMovement.getUnitCost(),
+                savedMovement.getRemarks(),
+                savedMovement.getPerformedBy(),
+                savedMovement.getMovementDate()));
     }
 
     private BigDecimal currentAverageCost(InventoryStock stock) {

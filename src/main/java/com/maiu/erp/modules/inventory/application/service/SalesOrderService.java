@@ -196,7 +196,6 @@ public class SalesOrderService {
                     item.getProductId(),
                     salesOrder.getConfirmedWarehouseId(),
                     item.getQuantity(),
-                    item.getUnitPrice(),
                     "SALES_ORDER",
                     salesOrder.getId(),
                     performedBy);
@@ -292,7 +291,6 @@ public class SalesOrderService {
                     item.getProductId(),
                     savedReturn.getWarehouseId(),
                     item.getQuantity(),
-                    item.getUnitPrice(),
                     savedReturn.getId(),
                     savedReturn.getRemarks(),
                     performedBy);

@@ -42,6 +42,10 @@ public class DefaultRoleService {
         return getOrSyncRole("PROJECT_MANAGER", PermissionCatalog.projectManagerPermissions());
     }
 
+    public Role getOrCreateFinanceRole() {
+        return getOrSyncRole("FINANCE", PermissionCatalog.financePermissions());
+    }
+
     private Role getOrSyncRole(String roleName, Set<String> permissions) {
         Set<String> normalizedPermissions = new LinkedHashSet<>(PermissionCatalog.normalize(permissions));
 

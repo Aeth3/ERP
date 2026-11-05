@@ -382,7 +382,8 @@ class PurchaseOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
                 purchaseOrderRepository,
                 itemRepository,
@@ -454,7 +455,8 @@ class PurchaseOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
                 purchaseOrderRepository,
                 itemRepository,
@@ -536,7 +538,8 @@ class PurchaseOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
                 purchaseOrderRepository,
                 itemRepository,
@@ -625,7 +628,8 @@ class PurchaseOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
                 purchaseOrderRepository,
                 itemRepository,
