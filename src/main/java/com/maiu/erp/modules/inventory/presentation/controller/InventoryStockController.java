@@ -1,6 +1,7 @@
 package com.maiu.erp.modules.inventory.presentation.controller;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
@@ -99,6 +100,7 @@ public class InventoryStockController {
     private InventoryStockDto toDto(InventoryStock stock) {
         BigDecimal availableQuantity = stock.getQuantityOnHand()
                 .subtract(stock.getReservedQuantity());
+        BigDecimal averageCost = stock.getAverageCost() == null ? BigDecimal.ZERO : stock.getAverageCost();
 
         return new InventoryStockDto(
                 stock.getId(),
@@ -108,6 +110,8 @@ public class InventoryStockController {
                 stock.getReservedQuantity(),
                 availableQuantity,
                 stock.getReorderLevel(),
+                averageCost,
+                stock.getQuantityOnHand().multiply(averageCost).setScale(2, RoundingMode.HALF_UP),
                 stock.getUpdatedAt());
     }
 }

@@ -127,7 +127,7 @@ class PurchaseOrderServiceTest {
                 new InMemoryPurchaseReturnRepository(),
                 new InMemoryPurchaseReturnItemRepository());
 
-        purchaseOrderService.approvePurchaseOrder(purchaseOrder.getId());
+        purchaseOrderService.finalizePurchaseOrderApproval(purchaseOrder.getId());
 
         assertEquals(
                 PurchaseOrderStatus.APPROVED,
@@ -382,7 +382,8 @@ class PurchaseOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
                 purchaseOrderRepository,
                 itemRepository,
@@ -454,7 +455,8 @@ class PurchaseOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
                 purchaseOrderRepository,
                 itemRepository,
@@ -536,7 +538,8 @@ class PurchaseOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
                 purchaseOrderRepository,
                 itemRepository,
@@ -625,7 +628,8 @@ class PurchaseOrderServiceTest {
         InventoryService inventoryService = new InventoryService(
                 inventoryStockRepository,
                 stockMovementRepository,
-                inventoryValidationService);
+                inventoryValidationService,
+                event -> { });
         PurchaseOrderService purchaseOrderService = new PurchaseOrderService(
                 purchaseOrderRepository,
                 itemRepository,

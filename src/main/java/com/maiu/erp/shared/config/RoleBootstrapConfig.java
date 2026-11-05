@@ -18,6 +18,7 @@ public class RoleBootstrapConfig {
             defaultRoleService.getOrCreateProcurementRole();
             defaultRoleService.getOrCreateWarehouseRole();
             defaultRoleService.getOrCreateProjectManagerRole();
+            defaultRoleService.getOrCreateFinanceRole();
         };
     }
 }

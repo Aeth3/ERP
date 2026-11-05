@@ -29,6 +29,14 @@ public final class PermissionCatalog {
     public static final String APPROVAL_READ = "approval.read";
     public static final String APPROVAL_MANAGE = "approval.manage";
 
+    public static final String FINANCE_READ = "finance.read";
+    public static final String FINANCE_JOURNAL_MANAGE = "finance.journal.manage";
+    public static final String FINANCE_PERIOD_MANAGE = "finance.period.manage";
+    public static final String FINANCE_AP_READ = "finance.ap.read";
+    public static final String FINANCE_AP_MANAGE = "finance.ap.manage";
+    public static final String FINANCE_AR_READ = "finance.ar.read";
+    public static final String FINANCE_AR_MANAGE = "finance.ar.manage";
+
     public static final String UAT_SEED_MANAGE = "uat.seed.manage";
 
     public static Set<String> allPermissions() {
@@ -52,6 +60,13 @@ public final class PermissionCatalog {
                 PROJECT_REPORT_READ,
                 APPROVAL_READ,
                 APPROVAL_MANAGE,
+                FINANCE_READ,
+                FINANCE_JOURNAL_MANAGE,
+                FINANCE_PERIOD_MANAGE,
+                FINANCE_AP_READ,
+                FINANCE_AP_MANAGE,
+                FINANCE_AR_READ,
+                FINANCE_AR_MANAGE,
                 UAT_SEED_MANAGE);
     }
 
@@ -99,6 +114,20 @@ public final class PermissionCatalog {
                 PROJECT_MANAGE,
                 PROJECT_BUDGET_MANAGE,
                 APPROVAL_READ,
+                PROJECT_REPORT_READ);
+    }
+
+    public static Set<String> financePermissions() {
+        return Set.of(
+                FINANCE_READ,
+                FINANCE_JOURNAL_MANAGE,
+                FINANCE_PERIOD_MANAGE,
+                FINANCE_AP_READ,
+                FINANCE_AP_MANAGE,
+                FINANCE_AR_READ,
+                FINANCE_AR_MANAGE,
+                INVENTORY_READ,
+                PROJECT_READ,
                 PROJECT_REPORT_READ);
     }
 

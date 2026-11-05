@@ -1,12 +1,12 @@
 CREATE TABLE IF NOT EXISTS material_returns (
-    id BINARY(16) NOT NULL,
+    id UUID NOT NULL,
     return_number VARCHAR(255) NOT NULL,
-    material_issue_id BINARY(16) NOT NULL,
-    project_id BINARY(16) NOT NULL,
-    warehouse_id BINARY(16) NOT NULL,
+    material_issue_id UUID NOT NULL,
+    project_id UUID NOT NULL,
+    warehouse_id UUID NOT NULL,
     remarks VARCHAR(255) NULL,
     performed_by VARCHAR(255) NOT NULL,
-    returned_at DATETIME(6) NOT NULL,
+    returned_at TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT pk_material_returns PRIMARY KEY (id),
     CONSTRAINT uk_material_returns_return_number UNIQUE (return_number)
 );
@@ -21,9 +21,9 @@ CREATE INDEX IF NOT EXISTS idx_material_returns_warehouse_id
     ON material_returns (warehouse_id);
 
 CREATE TABLE IF NOT EXISTS material_return_items (
-    id BINARY(16) NOT NULL,
-    material_return_id BINARY(16) NOT NULL,
-    product_id BINARY(16) NOT NULL,
+    id UUID NOT NULL,
+    material_return_id UUID NOT NULL,
+    product_id UUID NOT NULL,
     quantity DECIMAL(38, 2) NOT NULL,
     unit_cost DECIMAL(38, 2) NOT NULL,
     line_total DECIMAL(38, 2) NOT NULL,

@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.maiu.erp.modules.approval.application.dto.ApproveApprovalRequestRequest;
 import com.maiu.erp.modules.approval.application.dto.CreateApprovalRequestRequest;
 import com.maiu.erp.modules.approval.application.service.ApprovalWorkflowService;
 import com.maiu.erp.modules.approval.domain.enums.ApprovalRequestType;
@@ -72,19 +71,18 @@ public class PurchaseOrderController {
     @PostMapping("/{id}/approval-request")
     public ResponseEntity<ActionResponse> requestPurchaseOrderApproval(
             @PathVariable UUID id,
-            @Valid @RequestBody CreateApprovalRequestRequest request) {
-        approvalWorkflowService.requestPurchaseOrderApproval(id, request.requestedBy(), request.remarks());
+            @RequestBody(required = false) CreateApprovalRequestRequest request) {
+        approvalWorkflowService.requestPurchaseOrderApproval(id, request == null ? null : request.remarks());
         return ResponseEntity.ok(new ActionResponse("Purchase order approval requested successfully"));
     }
 
     @PostMapping("/{id}/approve")
     public ResponseEntity<ActionResponse> approvePurchaseOrder(
-            @PathVariable UUID id,
-            @Valid @RequestBody ApproveApprovalRequestRequest request) {
+            @PathVariable UUID id) {
         UUID approvalRequestId = approvalWorkflowService
                 .getPendingApprovalRequestByTarget(ApprovalRequestType.PURCHASE_ORDER_APPROVAL, id)
                 .getId();
-        approvalWorkflowService.approveApprovalRequest(approvalRequestId, request.approvedBy());
+        approvalWorkflowService.approveApprovalRequest(approvalRequestId);
 
         return ResponseEntity.ok(
                 new ActionResponse("Purchase order approved successfully"));
@@ -114,6 +112,8 @@ public class PurchaseOrderController {
     public ResponseEntity<ActionResponse> cancelPurchaseOrder(
             @PathVariable UUID id) {
         purchaseOrderService.cancelPurchaseOrder(id);
+        approvalWorkflowService.cancelPendingRequest(
+                ApprovalRequestType.PURCHASE_ORDER_APPROVAL, id, "Purchase order was cancelled");
 
         return ResponseEntity.ok(
                 new ActionResponse("Purchase order cancelled successfully"));

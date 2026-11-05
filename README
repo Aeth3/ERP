@@ -20,7 +20,7 @@ $env:SPRING_PROFILES_ACTIVE="dev"
 # dev profile notes
 # loads application.properties first, then overrides with application-dev.properties
 # also imports ERP/.env and ERP/.env.local if present
-# requires MySQL running at localhost:3306 with database maiu_db
+# requires PostgreSQL running at localhost:5432 with database maiu_db
 # seeds a default admin in dev:
 # email: admin@maiu.local
 # password: admin123
@@ -41,6 +41,9 @@ $env:SPRING_PROFILES_ACTIVE="dev"
 # Flyway is enabled by default
 # base/default config now expects hibernate validate
 # dev overrides that to hibernate update for convenience
+# for a brand-new empty PostgreSQL database, you may need one bootstrap run with
+# JPA_DDL_AUTO=update before switching back to validate, because Flyway currently
+# contains incremental migrations rather than a full baseline schema
 # prod startup now refuses:
 # - insecure JWT secret placeholders
 # - ddl-auto values other than validate/none
@@ -84,6 +87,7 @@ sudo docker run -d -p 8080:8080 \
 # if DB passwords or JWT secrets were ever committed, rotate them before the next deployment
 # see docs/SECRET_ROTATION.md for a concrete checklist and search targets
 # see docs/ENV_FILE_MAP.md for the exact per-file env split
+# see docs/POSTGRES_CUTOVER_CHECKLIST.md for the PostgreSQL cutover flow
 
 # docs
 # inventory and construction flows live under docs/

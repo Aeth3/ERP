@@ -31,6 +31,12 @@ public class SecurityConfig {
                         "PROCUREMENT",
                         "WAREHOUSE",
                         "PROJECT_MANAGER",
+                        "FINANCE",
+                        "ADMIN"
+        };
+        // Ledger data is finance-only, for reads as well as writes.
+        private static final String[] FINANCE_ROLES = {
+                        "FINANCE",
                         "ADMIN"
         };
         private static final String[] PROCUREMENT_WRITE_ROLES = {
@@ -77,6 +83,7 @@ public class SecurityConfig {
                                                 .requestMatchers("/admin/**").hasRole("ADMIN")
                                                 .requestMatchers(HttpMethod.GET, "/approvals/**").hasAnyRole(READ_ROLES)
                                                 .requestMatchers("/approvals/**").hasRole("ADMIN")
+                                                .requestMatchers("/finance/**").hasAnyRole(FINANCE_ROLES)
                                                 .requestMatchers("/roles/**").hasRole("ADMIN")
                                                 .requestMatchers("/users/**").hasRole("ADMIN")
                                                 .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")

@@ -40,6 +40,12 @@ public class ProjectEntity {
 
     private BigDecimal budgetAmount;
 
+    @Column(precision = 14, scale = 2)
+    private BigDecimal contractAmount;
+
+    @Column(precision = 5, scale = 2)
+    private BigDecimal retentionRate;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ProjectStatus status;
@@ -110,6 +116,22 @@ public class ProjectEntity {
 
     public void setBudgetAmount(BigDecimal budgetAmount) {
         this.budgetAmount = budgetAmount;
+    }
+
+    public BigDecimal getContractAmount() {
+        return contractAmount;
+    }
+
+    public void setContractAmount(BigDecimal contractAmount) {
+        this.contractAmount = contractAmount;
+    }
+
+    public BigDecimal getRetentionRate() {
+        return retentionRate;
+    }
+
+    public void setRetentionRate(BigDecimal retentionRate) {
+        this.retentionRate = retentionRate;
     }
 
     public ProjectStatus getStatus() {

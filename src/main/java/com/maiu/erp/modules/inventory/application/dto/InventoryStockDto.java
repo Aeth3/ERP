@@ -12,6 +12,8 @@ public class InventoryStockDto {
     private final BigDecimal reservedQuantity;
     private final BigDecimal availableQuantity;
     private final BigDecimal reorderLevel;
+    private final BigDecimal averageCost;
+    private final BigDecimal stockValue;
     private final Instant updatedAt;
 
     public InventoryStockDto(
@@ -22,6 +24,8 @@ public class InventoryStockDto {
             BigDecimal reservedQuantity,
             BigDecimal availableQuantity,
             BigDecimal reorderLevel,
+            BigDecimal averageCost,
+            BigDecimal stockValue,
             Instant updatedAt) {
         this.id = id;
         this.productId = productId;
@@ -30,7 +34,17 @@ public class InventoryStockDto {
         this.reservedQuantity = reservedQuantity;
         this.availableQuantity = availableQuantity;
         this.reorderLevel = reorderLevel;
+        this.averageCost = averageCost;
+        this.stockValue = stockValue;
         this.updatedAt = updatedAt;
+    }
+
+    public BigDecimal getAverageCost() {
+        return averageCost;
+    }
+
+    public BigDecimal getStockValue() {
+        return stockValue;
     }
 
     public UUID getId() {

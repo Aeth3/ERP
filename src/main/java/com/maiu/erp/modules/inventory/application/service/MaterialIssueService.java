@@ -87,15 +87,8 @@ public class MaterialIssueService {
         for (CreateMaterialIssueItemRequest itemRequest : request.items()) {
             validateItem(itemRequest, request.warehouseId());
 
-            MaterialIssueItem item = new MaterialIssueItem();
-            item.setMaterialIssueId(savedIssue.getId());
-            item.setProductId(itemRequest.productId());
-            item.setQuantity(itemRequest.quantity());
-            item.setUnitCost(itemRequest.unitCost());
-            item.setLineTotal(itemRequest.quantity().multiply(itemRequest.unitCost()));
-            materialIssueItemRepository.save(item);
-
-            inventoryService.issueStockToProject(
+            // Inventory decides the cost (warehouse average); the requested cost is only a fallback.
+            BigDecimal issuedUnitCost = inventoryService.issueStockToProject(
                     itemRequest.productId(),
                     request.warehouseId(),
                     request.projectId(),
@@ -104,6 +97,17 @@ public class MaterialIssueService {
                     savedIssue.getId(),
                     savedIssue.getRemarks(),
                     savedIssue.getPerformedBy());
+            if (issuedUnitCost == null) {
+                issuedUnitCost = itemRequest.unitCost() == null ? BigDecimal.ZERO : itemRequest.unitCost();
+            }
+
+            MaterialIssueItem item = new MaterialIssueItem();
+            item.setMaterialIssueId(savedIssue.getId());
+            item.setProductId(itemRequest.productId());
+            item.setQuantity(itemRequest.quantity());
+            item.setUnitCost(issuedUnitCost);
+            item.setLineTotal(itemRequest.quantity().multiply(issuedUnitCost));
+            materialIssueItemRepository.save(item);
         }
 
         return savedIssue.getId();
@@ -123,7 +127,7 @@ public class MaterialIssueService {
         }
 
         Map<UUID, IssueBalance> issuedByProduct = buildIssuedBalances(issuedItems);
-        Map<UUID, BigDecimal> returnedByProduct = buildReturnedQuantities(issueId);
+        Map<UUID, QuantityCostAccumulator> returnedByProduct = buildReturnedBalances(issueId);
 
         MaterialReturn savedReturn = createReturnHeader(
                 issueId,
@@ -139,19 +143,21 @@ public class MaterialIssueService {
                 throw new BadRequestException("Returned product is not part of the source material issue");
             }
 
-            BigDecimal alreadyReturned = returnedByProduct.getOrDefault(itemRequest.productId(), BigDecimal.ZERO);
-            BigDecimal newReturnedTotal = alreadyReturned.add(itemRequest.quantity());
-            if (newReturnedTotal.compareTo(issueBalance.quantity()) > 0) {
+            QuantityCostAccumulator alreadyReturned = returnedByProduct.computeIfAbsent(
+                    itemRequest.productId(),
+                    ignored -> new QuantityCostAccumulator());
+            if (alreadyReturned.quantity.add(itemRequest.quantity()).compareTo(issueBalance.quantity()) > 0) {
                 throw new BadRequestException("Return quantity exceeds issued quantity for product");
             }
-            returnedByProduct.put(itemRequest.productId(), newReturnedTotal);
+            BigDecimal lineTotal = calculateReturnLineTotal(issueBalance, alreadyReturned, itemRequest.quantity());
+            alreadyReturned.add(itemRequest.quantity(), lineTotal);
 
             MaterialReturnItem item = new MaterialReturnItem();
             item.setMaterialReturnId(savedReturn.getId());
             item.setProductId(itemRequest.productId());
             item.setQuantity(itemRequest.quantity());
             item.setUnitCost(issueBalance.unitCost());
-            item.setLineTotal(itemRequest.quantity().multiply(issueBalance.unitCost()));
+            item.setLineTotal(lineTotal);
             materialReturnItemRepository.save(item);
 
             inventoryService.returnStockFromProject(
@@ -178,7 +184,7 @@ public class MaterialIssueService {
         }
 
         Map<UUID, IssueBalance> issuedByProduct = buildIssuedBalances(issuedItems);
-        Map<UUID, BigDecimal> returnedByProduct = buildReturnedQuantities(issueId);
+        Map<UUID, QuantityCostAccumulator> returnedByProduct = buildReturnedBalances(issueId);
         Map<UUID, BigDecimal> remainingByProduct = buildRemainingQuantities(issuedByProduct, returnedByProduct);
 
         if (remainingByProduct.values().stream().allMatch(quantity -> quantity.compareTo(BigDecimal.ZERO) <= 0)) {
@@ -194,12 +200,13 @@ public class MaterialIssueService {
             }
 
             IssueBalance issueBalance = issuedByProduct.get(productId);
+            QuantityCostAccumulator alreadyReturned = returnedByProduct.getOrDefault(productId, new QuantityCostAccumulator());
             MaterialReturnItem item = new MaterialReturnItem();
             item.setMaterialReturnId(savedReturn.getId());
             item.setProductId(productId);
             item.setQuantity(remainingQuantity);
             item.setUnitCost(issueBalance.unitCost());
-            item.setLineTotal(remainingQuantity.multiply(issueBalance.unitCost()));
+            item.setLineTotal(calculateReturnLineTotal(issueBalance, alreadyReturned, remainingQuantity));
             materialReturnItemRepository.save(item);
 
             inventoryService.returnStockFromProject(
@@ -249,7 +256,7 @@ public class MaterialIssueService {
         if (itemRequest.quantity() == null || itemRequest.quantity().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException("Item quantity must be greater than zero");
         }
-        if (itemRequest.unitCost() == null || itemRequest.unitCost().compareTo(BigDecimal.ZERO) < 0) {
+        if (itemRequest.unitCost() != null && itemRequest.unitCost().compareTo(BigDecimal.ZERO) < 0) {
             throw new BadRequestException("Item unit cost must be zero or greater");
         }
 
@@ -320,9 +327,9 @@ public class MaterialIssueService {
     }
 
     private Map<UUID, IssueBalance> buildIssuedBalances(List<MaterialIssueItem> issuedItems) {
-        Map<UUID, IssueBalanceAccumulator> accumulators = new LinkedHashMap<>();
+        Map<UUID, QuantityCostAccumulator> accumulators = new LinkedHashMap<>();
         for (MaterialIssueItem issuedItem : issuedItems) {
-            accumulators.computeIfAbsent(issuedItem.getProductId(), ignored -> new IssueBalanceAccumulator())
+            accumulators.computeIfAbsent(issuedItem.getProductId(), ignored -> new QuantityCostAccumulator())
                     .add(issuedItem.getQuantity(), issuedItem.getLineTotal());
         }
 
@@ -331,11 +338,12 @@ public class MaterialIssueService {
         return balances;
     }
 
-    private Map<UUID, BigDecimal> buildReturnedQuantities(UUID issueId) {
-        Map<UUID, BigDecimal> returnedByProduct = new LinkedHashMap<>();
+    private Map<UUID, QuantityCostAccumulator> buildReturnedBalances(UUID issueId) {
+        Map<UUID, QuantityCostAccumulator> returnedByProduct = new LinkedHashMap<>();
         for (MaterialReturn materialReturn : materialReturnRepository.findByMaterialIssueId(issueId)) {
             for (MaterialReturnItem item : materialReturnItemRepository.findByMaterialReturnId(materialReturn.getId())) {
-                returnedByProduct.merge(item.getProductId(), item.getQuantity(), BigDecimal::add);
+                returnedByProduct.computeIfAbsent(item.getProductId(), ignored -> new QuantityCostAccumulator())
+                        .add(item.getQuantity(), item.getLineTotal());
             }
         }
         return returnedByProduct;
@@ -343,12 +351,36 @@ public class MaterialIssueService {
 
     private Map<UUID, BigDecimal> buildRemainingQuantities(
             Map<UUID, IssueBalance> issuedByProduct,
-            Map<UUID, BigDecimal> returnedByProduct) {
+            Map<UUID, QuantityCostAccumulator> returnedByProduct) {
         Map<UUID, BigDecimal> remainingByProduct = new LinkedHashMap<>();
-        issuedByProduct.forEach((productId, issueBalance) -> remainingByProduct.put(
-                productId,
-                issueBalance.quantity().subtract(returnedByProduct.getOrDefault(productId, BigDecimal.ZERO))));
+        issuedByProduct.forEach((productId, issueBalance) -> {
+            QuantityCostAccumulator returned = returnedByProduct.get(productId);
+            BigDecimal returnedQuantity = returned == null ? BigDecimal.ZERO : returned.quantity;
+            remainingByProduct.put(productId, issueBalance.quantity().subtract(returnedQuantity));
+        });
         return remainingByProduct;
+    }
+
+    /**
+     * Prices a return so that cumulative returned cost tracks the issued line total exactly:
+     * the cost of the returned share is computed from the original total rather than from a
+     * rounded unit cost, and the return that clears the balance refunds whatever cost remains.
+     */
+    private BigDecimal calculateReturnLineTotal(
+            IssueBalance issueBalance,
+            QuantityCostAccumulator alreadyReturned,
+            BigDecimal returnQuantity) {
+        BigDecimal newReturnedQuantity = alreadyReturned.quantity.add(returnQuantity);
+        BigDecimal cumulativeReturnedCost;
+        if (newReturnedQuantity.compareTo(issueBalance.quantity()) >= 0) {
+            cumulativeReturnedCost = issueBalance.lineTotal();
+        } else {
+            int scale = Math.max(2, issueBalance.lineTotal().scale());
+            cumulativeReturnedCost = issueBalance.lineTotal()
+                    .multiply(newReturnedQuantity)
+                    .divide(issueBalance.quantity(), scale, RoundingMode.HALF_UP);
+        }
+        return cumulativeReturnedCost.subtract(alreadyReturned.lineTotal);
     }
 
     private String buildReversalRemarks(String remarks, String issueNumber) {
@@ -359,10 +391,10 @@ public class MaterialIssueService {
         return prefix + " | " + remarks;
     }
 
-    private record IssueBalance(BigDecimal quantity, BigDecimal unitCost) {
+    private record IssueBalance(BigDecimal quantity, BigDecimal unitCost, BigDecimal lineTotal) {
     }
 
-    private static final class IssueBalanceAccumulator {
+    private static final class QuantityCostAccumulator {
         private BigDecimal quantity = BigDecimal.ZERO;
         private BigDecimal lineTotal = BigDecimal.ZERO;
 
@@ -375,7 +407,7 @@ public class MaterialIssueService {
             BigDecimal unitCost = quantity.compareTo(BigDecimal.ZERO) == 0
                     ? BigDecimal.ZERO
                     : lineTotal.divide(quantity, 2, RoundingMode.HALF_UP);
-            return new IssueBalance(quantity, unitCost);
+            return new IssueBalance(quantity, unitCost, lineTotal);
         }
     }
 }

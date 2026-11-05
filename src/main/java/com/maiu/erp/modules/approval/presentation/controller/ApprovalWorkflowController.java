@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.maiu.erp.modules.approval.application.dto.ActionResponse;
-import com.maiu.erp.modules.approval.application.dto.ApproveApprovalRequestRequest;
 import com.maiu.erp.modules.approval.application.dto.ApprovalRequestDto;
 import com.maiu.erp.modules.approval.application.dto.RejectApprovalRequestRequest;
 import com.maiu.erp.modules.approval.application.service.ApprovalWorkflowService;
@@ -42,9 +41,8 @@ public class ApprovalWorkflowController {
 
     @PostMapping("/{id}/approve")
     public ResponseEntity<ActionResponse> approveApprovalRequest(
-            @PathVariable UUID id,
-            @Valid @RequestBody ApproveApprovalRequestRequest request) {
-        approvalWorkflowService.approveApprovalRequest(id, request.approvedBy());
+            @PathVariable UUID id) {
+        approvalWorkflowService.approveApprovalRequest(id);
         return ResponseEntity.ok(new ActionResponse("Approval request approved successfully"));
     }
 
@@ -52,7 +50,7 @@ public class ApprovalWorkflowController {
     public ResponseEntity<ActionResponse> rejectApprovalRequest(
             @PathVariable UUID id,
             @Valid @RequestBody RejectApprovalRequestRequest request) {
-        approvalWorkflowService.rejectApprovalRequest(id, request.rejectedBy(), request.rejectionReason());
+        approvalWorkflowService.rejectApprovalRequest(id, request.rejectionReason());
         return ResponseEntity.ok(new ActionResponse("Approval request rejected successfully"));
     }
 

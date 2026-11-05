@@ -38,7 +38,9 @@ class ProjectServiceTest {
                 "Cebu",
                 LocalDate.of(2026, 5, 25),
                 LocalDate.of(2026, 7, 15),
-                new BigDecimal("250000.00")));
+                new BigDecimal("250000.00"),
+                new BigDecimal("400000.00"),
+                new BigDecimal("10.00")));
 
         Project project = projectRepository.findById(projectId).orElseThrow();
         assertEquals(ProjectStatus.DRAFT, project.getStatus());
@@ -56,6 +58,8 @@ class ProjectServiceTest {
                         "PRJ-002",
                         "Site Office",
                         UUID.randomUUID(),
+                        null,
+                        null,
                         null,
                         null,
                         null,
@@ -81,7 +85,9 @@ class ProjectServiceTest {
                         null,
                         null,
                         null,
-                        new BigDecimal("-1.00"))));
+                        new BigDecimal("-1.00"),
+                        null,
+                        null)));
 
         assertEquals("Budget amount must be zero or greater", exception.getMessage());
     }

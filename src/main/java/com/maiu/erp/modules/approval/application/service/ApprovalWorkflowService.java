@@ -5,7 +5,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.maiu.erp.modules.approval.domain.enums.ApprovalRequestStatus;
@@ -29,14 +33,17 @@ public class ApprovalWorkflowService {
     private final ApprovalRequestRepository approvalRequestRepository;
     private final PurchaseOrderService purchaseOrderService;
     private final ProjectService projectService;
+    private final boolean allowSelfApproval;
 
     public ApprovalWorkflowService(
             ApprovalRequestRepository approvalRequestRepository,
             PurchaseOrderService purchaseOrderService,
-            ProjectService projectService) {
+            ProjectService projectService,
+            @Value("${app.approval.allow-self-approval:false}") boolean allowSelfApproval) {
         this.approvalRequestRepository = approvalRequestRepository;
         this.purchaseOrderService = purchaseOrderService;
         this.projectService = projectService;
+        this.allowSelfApproval = allowSelfApproval;
     }
 
     @PreAuthorize("hasAuthority('" + PermissionCatalog.APPROVAL_READ + "')")
@@ -56,7 +63,7 @@ public class ApprovalWorkflowService {
     }
 
     @Transactional
-    public ApprovalRequest requestPurchaseOrderApproval(UUID purchaseOrderId, String requestedBy, String remarks) {
+    public ApprovalRequest requestPurchaseOrderApproval(UUID purchaseOrderId, String remarks) {
         PurchaseOrder purchaseOrder = purchaseOrderService.getPurchaseOrderById(purchaseOrderId);
         if (purchaseOrder.getStatus() != PurchaseOrderStatus.DRAFT) {
             throw new BadRequestException("Only draft purchase orders can request approval");
@@ -70,12 +77,11 @@ public class ApprovalWorkflowService {
                 ApprovalRequestType.PURCHASE_ORDER_APPROVAL,
                 purchaseOrderId,
                 purchaseOrder.getPoNumber(),
-                requestedBy,
                 remarks));
     }
 
     @Transactional
-    public ApprovalRequest requestProjectActivation(UUID projectId, String requestedBy, String remarks) {
+    public ApprovalRequest requestProjectActivation(UUID projectId, String remarks) {
         Project project = projectService.getProjectById(projectId);
         if (project.getStatus() != ProjectStatus.DRAFT) {
             throw new BadRequestException("Only draft projects can request activation approval");
@@ -86,14 +92,17 @@ public class ApprovalWorkflowService {
                 ApprovalRequestType.PROJECT_ACTIVATION,
                 projectId,
                 project.getProjectCode() + " - " + project.getProjectName(),
-                requestedBy,
                 remarks));
     }
 
     @Transactional
     @PreAuthorize("hasAuthority('" + PermissionCatalog.APPROVAL_MANAGE + "')")
-    public ApprovalRequest approveApprovalRequest(UUID approvalRequestId, String approvedBy) {
+    public ApprovalRequest approveApprovalRequest(UUID approvalRequestId) {
         ApprovalRequest approvalRequest = getPendingApprovalRequest(approvalRequestId);
+        String approvedBy = currentActor();
+        if (!allowSelfApproval && approvedBy.equalsIgnoreCase(approvalRequest.getRequestedBy())) {
+            throw new BadRequestException("You cannot approve a request you raised");
+        }
 
         if (approvalRequest.getType() == ApprovalRequestType.PURCHASE_ORDER_APPROVAL) {
             purchaseOrderService.finalizePurchaseOrderApproval(approvalRequest.getTargetId());
@@ -104,7 +113,7 @@ public class ApprovalWorkflowService {
         }
 
         approvalRequest.setStatus(ApprovalRequestStatus.APPROVED);
-        approvalRequest.setApprovedBy(normalizeRequired(approvedBy, "approvedBy is required"));
+        approvalRequest.setApprovedBy(approvedBy);
         approvalRequest.setApprovedAt(Instant.now());
         approvalRequest.setRejectedBy(null);
         approvalRequest.setRejectedAt(null);
@@ -114,15 +123,31 @@ public class ApprovalWorkflowService {
 
     @Transactional
     @PreAuthorize("hasAuthority('" + PermissionCatalog.APPROVAL_MANAGE + "')")
-    public ApprovalRequest rejectApprovalRequest(UUID approvalRequestId, String rejectedBy, String rejectionReason) {
+    public ApprovalRequest rejectApprovalRequest(UUID approvalRequestId, String rejectionReason) {
         ApprovalRequest approvalRequest = getPendingApprovalRequest(approvalRequestId);
         approvalRequest.setStatus(ApprovalRequestStatus.REJECTED);
-        approvalRequest.setRejectedBy(normalizeRequired(rejectedBy, "rejectedBy is required"));
+        approvalRequest.setRejectedBy(currentActor());
         approvalRequest.setRejectedAt(Instant.now());
         approvalRequest.setRejectionReason(normalizeRequired(rejectionReason, "rejectionReason is required"));
         approvalRequest.setApprovedBy(null);
         approvalRequest.setApprovedAt(null);
         return approvalRequestRepository.save(approvalRequest);
+    }
+
+    /**
+     * Closes the pending request for a target that was cancelled, so it does not linger in the
+     * approval queue. The rejection fields record who closed it and why.
+     */
+    @Transactional
+    public void cancelPendingRequest(ApprovalRequestType type, UUID targetId, String reason) {
+        approvalRequestRepository.findFirstByTypeAndTargetIdAndStatus(type, targetId, ApprovalRequestStatus.PENDING)
+                .ifPresent(approvalRequest -> {
+                    approvalRequest.setStatus(ApprovalRequestStatus.CANCELLED);
+                    approvalRequest.setRejectedBy(currentActor());
+                    approvalRequest.setRejectedAt(Instant.now());
+                    approvalRequest.setRejectionReason(reason);
+                    approvalRequestRepository.save(approvalRequest);
+                });
     }
 
     public ApprovalRequest getPendingApprovalRequestByTarget(ApprovalRequestType type, UUID targetId) {
@@ -143,17 +168,29 @@ public class ApprovalWorkflowService {
             ApprovalRequestType type,
             UUID targetId,
             String targetLabel,
-            String requestedBy,
             String remarks) {
         ApprovalRequest approvalRequest = new ApprovalRequest();
         approvalRequest.setType(type);
         approvalRequest.setStatus(ApprovalRequestStatus.PENDING);
         approvalRequest.setTargetId(targetId);
         approvalRequest.setTargetLabel(targetLabel);
-        approvalRequest.setRequestedBy(normalizeRequired(requestedBy, "requestedBy is required"));
+        approvalRequest.setRequestedBy(currentActor());
         approvalRequest.setRemarks(trimToNull(remarks));
         approvalRequest.setRequestedAt(Instant.now());
         return approvalRequest;
+    }
+
+    /** The authenticated user's login name; approval actions are never attributed to a client-supplied name. */
+    private String currentActor() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+                || authentication instanceof AnonymousAuthenticationToken
+                || !authentication.isAuthenticated()
+                || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+            throw new BadRequestException("An authenticated user is required for approval actions");
+        }
+        return authentication.getName();
     }
 
     private void ensureNoPendingRequest(ApprovalRequestType type, UUID targetId) {

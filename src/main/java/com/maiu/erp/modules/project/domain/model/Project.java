@@ -16,6 +16,8 @@ public class Project {
     private LocalDate startDate;
     private LocalDate targetEndDate;
     private BigDecimal budgetAmount;
+    private BigDecimal contractAmount;
+    private BigDecimal retentionRate;
     private ProjectStatus status;
     private Instant createdAt;
     private Instant updatedAt;
@@ -82,6 +84,22 @@ public class Project {
 
     public void setBudgetAmount(BigDecimal budgetAmount) {
         this.budgetAmount = budgetAmount;
+    }
+
+    public BigDecimal getContractAmount() {
+        return contractAmount;
+    }
+
+    public void setContractAmount(BigDecimal contractAmount) {
+        this.contractAmount = contractAmount;
+    }
+
+    public BigDecimal getRetentionRate() {
+        return retentionRate;
+    }
+
+    public void setRetentionRate(BigDecimal retentionRate) {
+        this.retentionRate = retentionRate;
     }
 
     public ProjectStatus getStatus() {

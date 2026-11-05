@@ -32,6 +32,9 @@ public class InventoryStockEntity {
     @Column(nullable = false)
     private BigDecimal reorderLevel = BigDecimal.ZERO;
 
+    @Column(nullable = false, precision = 38, scale = 4)
+    private BigDecimal averageCost = BigDecimal.ZERO;
+
     @Column(nullable = false)
     private Instant updatedAt = Instant.now();
 
@@ -81,6 +84,14 @@ public class InventoryStockEntity {
 
     public void setReorderLevel(BigDecimal reorderLevel) {
         this.reorderLevel = reorderLevel;
+    }
+
+    public BigDecimal getAverageCost() {
+        return averageCost;
+    }
+
+    public void setAverageCost(BigDecimal averageCost) {
+        this.averageCost = averageCost;
     }
 
     public Instant getUpdatedAt() {

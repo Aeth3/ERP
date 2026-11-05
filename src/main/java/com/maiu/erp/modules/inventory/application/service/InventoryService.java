@@ -12,6 +12,8 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.maiu.erp.modules.inventory.application.port.InventoryLedgerEvent;
+import com.maiu.erp.modules.inventory.application.port.InventoryLedgerPoster;
 import com.maiu.erp.modules.inventory.domain.enums.MovementType;
 import com.maiu.erp.modules.inventory.domain.model.InventoryStock;
 import com.maiu.erp.modules.inventory.domain.model.StockMovement;
@@ -25,18 +27,23 @@ import jakarta.transaction.Transactional;
 @Service
 public class InventoryService {
 
+    private static final int COST_SCALE = 4;
+
     private final InventoryStockRepository inventoryStockRepository;
     private final StockMovementRepository stockMovementRepository;
     private final InventoryValidationService inventoryValidationService;
+    private final InventoryLedgerPoster inventoryLedgerPoster;
 
     public InventoryService(
             InventoryStockRepository inventoryStockRepository,
             StockMovementRepository stockMovementRepository,
-            InventoryValidationService inventoryValidationService) {
+            InventoryValidationService inventoryValidationService,
+            InventoryLedgerPoster inventoryLedgerPoster) {
 
         this.inventoryStockRepository = inventoryStockRepository;
         this.stockMovementRepository = stockMovementRepository;
         this.inventoryValidationService = inventoryValidationService;
+        this.inventoryLedgerPoster = inventoryLedgerPoster;
     }
 
     @Transactional
@@ -54,6 +61,7 @@ public class InventoryService {
 
         InventoryStock stock = getOrCreateStock(productId, warehouseId);
 
+        applyInboundCost(stock, quantity, unitCost);
         stock.setQuantityOnHand(
                 stock.getQuantityOnHand().add(quantity));
         stock.setUpdatedAt(Instant.now());
@@ -72,15 +80,15 @@ public class InventoryService {
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
 
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.PURCHASE_RECEIPT, stockMovementRepository.save(movement));
     }
 
+    /** Ships stock out for a sale. The movement is valued at average cost; the price stays on the order line. */
     @Transactional
     public void decreaseStock(
             UUID productId,
             UUID warehouseId,
             BigDecimal quantity,
-            BigDecimal unitCost,
             String referenceType,
             UUID referenceId,
             String performedBy) {
@@ -88,7 +96,7 @@ public class InventoryService {
         String normalizedPerformedBy = performedBy.trim();
         validatePositiveQuantity(quantity);
         InventoryStock stock = inventoryStockRepository
-                .findByProductIdAndWarehouseId(productId, warehouseId)
+                .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                 .orElseThrow(() -> new NotFoundException("Stock not found"));
 
         if (stock.getQuantityOnHand().compareTo(quantity) < 0) {
@@ -97,6 +105,7 @@ public class InventoryService {
 
         BigDecimal reservedToConsume = stock.getReservedQuantity()
                 .min(quantity);
+        BigDecimal shipmentUnitCost = currentAverageCost(stock);
 
         stock.setQuantityOnHand(
                 stock.getQuantityOnHand().subtract(quantity));
@@ -112,12 +121,12 @@ public class InventoryService {
         movement.setMovementType(MovementType.SALES_OUT);
         movement.setProjectId(null);
         movement.setQuantity(quantity);
-        movement.setUnitCost(unitCost);
+        movement.setUnitCost(shipmentUnitCost);
         movement.setReferenceType(referenceType);
         movement.setReferenceId(referenceId);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.SALES_SHIPMENT, stockMovementRepository.save(movement));
     }
 
     @Transactional
@@ -128,7 +137,7 @@ public class InventoryService {
         validatePositiveQuantity(quantity);
 
         InventoryStock stock = inventoryStockRepository
-                .findByProductIdAndWarehouseId(productId, warehouseId)
+                .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                 .orElseThrow(() -> new NotFoundException("Stock not found"));
 
         BigDecimal availableQuantity = stock.getQuantityOnHand()
@@ -153,7 +162,7 @@ public class InventoryService {
         validatePositiveQuantity(quantity);
 
         InventoryStock stock = inventoryStockRepository
-                .findByProductIdAndWarehouseId(productId, warehouseId)
+                .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                 .orElseThrow(() -> new NotFoundException("Stock not found"));
 
         if (stock.getReservedQuantity().compareTo(quantity) < 0) {
@@ -285,6 +294,7 @@ public class InventoryService {
 
         String normalizedAdjustmentType = normalizeAdjustmentType(adjustmentType);
         InventoryStock stock = getOrCreateStock(productId, warehouseId);
+        BigDecimal effectiveUnitCost;
 
         if ("DECREASE".equals(normalizedAdjustmentType)) {
             BigDecimal availableQuantity = stock.getQuantityOnHand()
@@ -294,9 +304,15 @@ public class InventoryService {
                 throw new BadRequestException("Insufficient available stock");
             }
 
+            effectiveUnitCost = currentAverageCost(stock);
             stock.setQuantityOnHand(
                     stock.getQuantityOnHand().subtract(quantity));
         } else {
+            // A counted-in increase uses the entered cost when given, otherwise the running average.
+            effectiveUnitCost = unitCost != null && unitCost.signum() > 0
+                    ? unitCost
+                    : currentAverageCost(stock);
+            applyInboundCost(stock, quantity, effectiveUnitCost);
             stock.setQuantityOnHand(
                     stock.getQuantityOnHand().add(quantity));
         }
@@ -310,13 +326,17 @@ public class InventoryService {
         movement.setMovementType(MovementType.ADJUSTMENT);
         movement.setProjectId(null);
         movement.setQuantity(quantity);
-        movement.setUnitCost(unitCost);
+        movement.setUnitCost(effectiveUnitCost);
         movement.setReferenceType("STOCK_ADJUSTMENT");
         movement.setRemarks(formatAdjustmentRemarks(normalizedAdjustmentType, reason, notes));
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
 
-        stockMovementRepository.save(movement);
+        postToLedger(
+                "DECREASE".equals(normalizedAdjustmentType)
+                        ? InventoryLedgerEvent.Kind.ADJUSTMENT_DECREASE
+                        : InventoryLedgerEvent.Kind.ADJUSTMENT_INCREASE,
+                stockMovementRepository.save(movement));
     }
 
     @Transactional
@@ -339,9 +359,16 @@ public class InventoryService {
             throw new BadRequestException("Source and destination warehouses must be different");
         }
 
-        InventoryStock sourceStock = inventoryStockRepository
-                .findByProductIdAndWarehouseId(productId, fromWarehouseId)
-                .orElseThrow(() -> new NotFoundException("Stock not found"));
+        // Lock both rows in a fixed order so opposite transfers (A->B, B->A) cannot deadlock.
+        InventoryStock sourceStock;
+        InventoryStock destinationStock;
+        if (fromWarehouseId.compareTo(toWarehouseId) < 0) {
+            sourceStock = getStockForUpdate(productId, fromWarehouseId);
+            destinationStock = getOrCreateStock(productId, toWarehouseId);
+        } else {
+            destinationStock = getOrCreateStock(productId, toWarehouseId);
+            sourceStock = getStockForUpdate(productId, fromWarehouseId);
+        }
 
         BigDecimal sourceAvailable = sourceStock.getQuantityOnHand()
                 .subtract(sourceStock.getReservedQuantity());
@@ -350,11 +377,13 @@ public class InventoryService {
             throw new BadRequestException("Insufficient available stock");
         }
 
-        InventoryStock destinationStock = getOrCreateStock(productId, toWarehouseId);
+        // Stock moves between warehouses at the source's average cost.
+        BigDecimal transferUnitCost = resolveOutboundCost(sourceStock, unitCost);
 
         sourceStock.setQuantityOnHand(sourceStock.getQuantityOnHand().subtract(quantity));
         sourceStock.setUpdatedAt(Instant.now());
 
+        applyInboundCost(destinationStock, quantity, transferUnitCost);
         destinationStock.setQuantityOnHand(destinationStock.getQuantityOnHand().add(quantity));
         destinationStock.setUpdatedAt(Instant.now());
 
@@ -369,7 +398,7 @@ public class InventoryService {
                 fromWarehouseId,
                 null,
                 quantity,
-                unitCost,
+                transferUnitCost,
                 transferReferenceId,
                 transferRemarks,
                 normalizedPerformedBy,
@@ -380,15 +409,19 @@ public class InventoryService {
                 toWarehouseId,
                 null,
                 quantity,
-                unitCost,
+                transferUnitCost,
                 transferReferenceId,
                 transferRemarks,
                 normalizedPerformedBy,
                 "IN"));
     }
 
+    /**
+     * Issues stock to a project at the warehouse's average cost and returns that cost.
+     * The given unitCost is only used when the stock has no average cost yet.
+     */
     @Transactional
-    public void issueStockToProject(
+    public BigDecimal issueStockToProject(
             UUID productId,
             UUID warehouseId,
             UUID projectId,
@@ -402,7 +435,7 @@ public class InventoryService {
         validatePositiveQuantity(quantity);
 
         InventoryStock stock = inventoryStockRepository
-                .findByProductIdAndWarehouseId(productId, warehouseId)
+                .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                 .orElseThrow(() -> new NotFoundException("Stock not found"));
 
         BigDecimal availableQuantity = stock.getQuantityOnHand()
@@ -411,6 +444,9 @@ public class InventoryService {
         if (availableQuantity.compareTo(quantity) < 0) {
             throw new BadRequestException("Insufficient available stock");
         }
+
+        BigDecimal issueUnitCost = resolveOutboundCost(stock, unitCost)
+                .setScale(2, RoundingMode.HALF_UP);
 
         stock.setQuantityOnHand(stock.getQuantityOnHand().subtract(quantity));
         stock.setUpdatedAt(Instant.now());
@@ -422,13 +458,14 @@ public class InventoryService {
         movement.setProjectId(projectId);
         movement.setMovementType(MovementType.PROJECT_ISSUE);
         movement.setQuantity(quantity);
-        movement.setUnitCost(unitCost);
+        movement.setUnitCost(issueUnitCost);
         movement.setReferenceType("MATERIAL_ISSUE");
         movement.setReferenceId(referenceId);
         movement.setRemarks(remarks);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.PROJECT_ISSUE, stockMovementRepository.save(movement));
+        return issueUnitCost;
     }
 
     @Transactional
@@ -446,6 +483,7 @@ public class InventoryService {
         validatePositiveQuantity(quantity);
 
         InventoryStock stock = getOrCreateStock(productId, warehouseId);
+        applyInboundCost(stock, quantity, unitCost);
         stock.setQuantityOnHand(stock.getQuantityOnHand().add(quantity));
         stock.setUpdatedAt(Instant.now());
         inventoryStockRepository.save(stock);
@@ -462,7 +500,7 @@ public class InventoryService {
         movement.setRemarks(remarks);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.PROJECT_RETURN, stockMovementRepository.save(movement));
     }
 
     @Transactional
@@ -479,7 +517,7 @@ public class InventoryService {
         validatePositiveQuantity(quantity);
 
         InventoryStock stock = inventoryStockRepository
-                .findByProductIdAndWarehouseId(productId, warehouseId)
+                .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                 .orElseThrow(() -> new NotFoundException("Stock not found"));
 
         BigDecimal availableQuantity = stock.getQuantityOnHand().subtract(stock.getReservedQuantity());
@@ -487,6 +525,7 @@ public class InventoryService {
             throw new BadRequestException("Insufficient available stock");
         }
 
+        applyOutboundAtCost(stock, quantity, unitCost);
         stock.setQuantityOnHand(stock.getQuantityOnHand().subtract(quantity));
         stock.setUpdatedAt(Instant.now());
         inventoryStockRepository.save(stock);
@@ -503,15 +542,15 @@ public class InventoryService {
         movement.setRemarks(remarks);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.PURCHASE_RETURN, stockMovementRepository.save(movement));
     }
 
+    /** Takes sold stock back in at the current average cost; the average itself is unchanged. */
     @Transactional
     public void receiveSalesReturn(
             UUID productId,
             UUID warehouseId,
             BigDecimal quantity,
-            BigDecimal unitPrice,
             UUID referenceId,
             String remarks,
             String performedBy) {
@@ -530,20 +569,28 @@ public class InventoryService {
         movement.setProjectId(null);
         movement.setMovementType(MovementType.RETURN);
         movement.setQuantity(quantity);
-        movement.setUnitCost(unitPrice == null ? BigDecimal.ZERO : unitPrice.setScale(2, RoundingMode.HALF_UP));
+        movement.setUnitCost(currentAverageCost(stock));
         movement.setReferenceType("SALES_RETURN");
         movement.setReferenceId(referenceId);
         movement.setRemarks(remarks);
         movement.setPerformedBy(normalizedPerformedBy);
         movement.setMovementDate(Instant.now());
-        stockMovementRepository.save(movement);
+        postToLedger(InventoryLedgerEvent.Kind.SALES_RETURN, stockMovementRepository.save(movement));
+    }
+
+    private InventoryStock getStockForUpdate(
+            UUID productId,
+            UUID warehouseId) {
+        return inventoryStockRepository
+                .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
+                .orElseThrow(() -> new NotFoundException("Stock not found"));
     }
 
     private InventoryStock getOrCreateStock(
             UUID productId,
             UUID warehouseId) {
         return inventoryStockRepository
-                .findByProductIdAndWarehouseId(productId, warehouseId)
+                .findByProductIdAndWarehouseIdForUpdate(productId, warehouseId)
                 .orElseGet(() -> {
                     InventoryStock newStock = new InventoryStock();
                     newStock.setProductId(productId);
@@ -551,9 +598,74 @@ public class InventoryService {
                     newStock.setQuantityOnHand(BigDecimal.ZERO);
                     newStock.setReservedQuantity(BigDecimal.ZERO);
                     newStock.setReorderLevel(BigDecimal.ZERO);
+                    newStock.setAverageCost(BigDecimal.ZERO);
                     newStock.setUpdatedAt(Instant.now());
                     return newStock;
                 });
+    }
+
+    private void postToLedger(InventoryLedgerEvent.Kind kind, StockMovement savedMovement) {
+        inventoryLedgerPoster.post(new InventoryLedgerEvent(
+                kind,
+                savedMovement.getId(),
+                savedMovement.getReferenceId(),
+                savedMovement.getProductId(),
+                savedMovement.getWarehouseId(),
+                savedMovement.getProjectId(),
+                savedMovement.getQuantity(),
+                savedMovement.getUnitCost(),
+                savedMovement.getRemarks(),
+                savedMovement.getPerformedBy(),
+                savedMovement.getMovementDate()));
+    }
+
+    private BigDecimal currentAverageCost(InventoryStock stock) {
+        return stock.getAverageCost() == null ? BigDecimal.ZERO : stock.getAverageCost();
+    }
+
+    // Average cost when known; otherwise the caller's fallback cost (or zero).
+    private BigDecimal resolveOutboundCost(InventoryStock stock, BigDecimal fallbackUnitCost) {
+        BigDecimal averageCost = currentAverageCost(stock);
+        if (averageCost.signum() > 0) {
+            return averageCost;
+        }
+        return fallbackUnitCost == null || fallbackUnitCost.signum() < 0
+                ? BigDecimal.ZERO
+                : fallbackUnitCost;
+    }
+
+    // Blends incoming units into the weighted average. Call before quantityOnHand is increased.
+    private void applyInboundCost(InventoryStock stock, BigDecimal quantity, BigDecimal unitCost) {
+        if (unitCost == null || unitCost.signum() < 0) {
+            return;
+        }
+
+        BigDecimal onHand = stock.getQuantityOnHand() == null ? BigDecimal.ZERO : stock.getQuantityOnHand();
+        if (onHand.signum() <= 0) {
+            stock.setAverageCost(unitCost.setScale(COST_SCALE, RoundingMode.HALF_UP));
+            return;
+        }
+
+        BigDecimal totalValue = onHand.multiply(currentAverageCost(stock))
+                .add(quantity.multiply(unitCost));
+        stock.setAverageCost(totalValue.divide(onHand.add(quantity), COST_SCALE, RoundingMode.HALF_UP));
+    }
+
+    // Removes units at a specific cost (e.g. a purchase return at its PO price). Call before quantityOnHand is reduced.
+    private void applyOutboundAtCost(InventoryStock stock, BigDecimal quantity, BigDecimal unitCost) {
+        if (unitCost == null || unitCost.signum() < 0) {
+            return;
+        }
+
+        BigDecimal remaining = stock.getQuantityOnHand().subtract(quantity);
+        if (remaining.signum() <= 0) {
+            return;
+        }
+
+        BigDecimal remainingValue = stock.getQuantityOnHand().multiply(currentAverageCost(stock))
+                .subtract(quantity.multiply(unitCost))
+                .max(BigDecimal.ZERO);
+        stock.setAverageCost(remainingValue.divide(remaining, COST_SCALE, RoundingMode.HALF_UP));
     }
 
     private void validatePositiveQuantity(
