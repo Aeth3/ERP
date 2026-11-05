@@ -16,6 +16,8 @@ public class ProjectDto {
     private final LocalDate startDate;
     private final LocalDate targetEndDate;
     private final BigDecimal budgetAmount;
+    private final BigDecimal contractAmount;
+    private final BigDecimal retentionRate;
     private final ProjectStatus status;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -29,6 +31,8 @@ public class ProjectDto {
             LocalDate startDate,
             LocalDate targetEndDate,
             BigDecimal budgetAmount,
+            BigDecimal contractAmount,
+            BigDecimal retentionRate,
             ProjectStatus status,
             Instant createdAt,
             Instant updatedAt) {
@@ -40,6 +44,8 @@ public class ProjectDto {
         this.startDate = startDate;
         this.targetEndDate = targetEndDate;
         this.budgetAmount = budgetAmount;
+        this.contractAmount = contractAmount;
+        this.retentionRate = retentionRate;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -75,6 +81,14 @@ public class ProjectDto {
 
     public BigDecimal getBudgetAmount() {
         return budgetAmount;
+    }
+
+    public BigDecimal getContractAmount() {
+        return contractAmount;
+    }
+
+    public BigDecimal getRetentionRate() {
+        return retentionRate;
     }
 
     public ProjectStatus getStatus() {

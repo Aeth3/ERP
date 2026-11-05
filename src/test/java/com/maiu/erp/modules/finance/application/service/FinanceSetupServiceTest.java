@@ -62,4 +62,22 @@ class FinanceSetupServiceTest {
         service.ensureDefaults();
         assertEquals(accountCount, accountRepository.findAll().size());
     }
+
+    @Test
+    void ensureDefaultsMapsArAccounts() {
+        service.ensureDefaults();
+
+        assertEquals(
+                accountRepository.findByCode("1100").orElseThrow().getId(),
+                mappingRepository.findAccountId(AccountMappingKey.ACCOUNTS_RECEIVABLE).orElseThrow());
+        assertEquals(
+                accountRepository.findByCode("1110").orElseThrow().getId(),
+                mappingRepository.findAccountId(AccountMappingKey.RETENTION_RECEIVABLE).orElseThrow());
+        assertEquals(
+                accountRepository.findByCode("4100").orElseThrow().getId(),
+                mappingRepository.findAccountId(AccountMappingKey.SALES_REVENUE).orElseThrow());
+        assertEquals(
+                accountRepository.findByCode("4000").orElseThrow().getId(),
+                mappingRepository.findAccountId(AccountMappingKey.CONTRACT_REVENUE).orElseThrow());
+    }
 }

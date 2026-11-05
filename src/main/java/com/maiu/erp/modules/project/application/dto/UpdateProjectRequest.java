@@ -15,5 +15,7 @@ public record UpdateProjectRequest(
         String location,
         LocalDate startDate,
         LocalDate targetEndDate,
-        BigDecimal budgetAmount) {
+        BigDecimal budgetAmount,
+        BigDecimal contractAmount,
+        BigDecimal retentionRate) {
 }

@@ -55,6 +55,8 @@ public class ProjectService {
         project.setStartDate(request.startDate());
         project.setTargetEndDate(request.targetEndDate());
         project.setBudgetAmount(normalizeBudgetAmount(request.budgetAmount()));
+        project.setContractAmount(normalizeContractAmount(request.contractAmount()));
+        project.setRetentionRate(normalizeRetentionRate(request.retentionRate()));
         project.setStatus(ProjectStatus.DRAFT);
         project.setCreatedAt(Instant.now());
         project.setUpdatedAt(Instant.now());
@@ -80,6 +82,8 @@ public class ProjectService {
         project.setStartDate(request.startDate());
         project.setTargetEndDate(request.targetEndDate());
         project.setBudgetAmount(normalizeBudgetAmount(request.budgetAmount()));
+        project.setContractAmount(normalizeContractAmount(request.contractAmount()));
+        project.setRetentionRate(normalizeRetentionRate(request.retentionRate()));
         project.setUpdatedAt(Instant.now());
         projectRepository.save(project);
     }
@@ -157,5 +161,38 @@ public class ProjectService {
         }
 
         return budgetAmount;
+    }
+
+    private BigDecimal normalizeContractAmount(BigDecimal contractAmount) {
+        if (contractAmount == null) {
+            return null;
+        }
+
+        if (contractAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BadRequestException("Contract amount must be zero or greater");
+        }
+
+        if (contractAmount.stripTrailingZeros().scale() > 2) {
+            throw new BadRequestException("Contract amount must have at most two decimal places");
+        }
+
+        return contractAmount;
+    }
+
+    private BigDecimal normalizeRetentionRate(BigDecimal retentionRate) {
+        if (retentionRate == null) {
+            return null;
+        }
+
+        if (retentionRate.compareTo(BigDecimal.ZERO) < 0
+                || retentionRate.compareTo(new BigDecimal("100")) > 0) {
+            throw new BadRequestException("Retention rate must be between 0 and 100");
+        }
+
+        if (retentionRate.stripTrailingZeros().scale() > 2) {
+            throw new BadRequestException("Retention rate must have at most two decimal places");
+        }
+
+        return retentionRate;
     }
 }

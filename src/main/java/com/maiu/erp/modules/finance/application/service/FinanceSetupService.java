@@ -70,17 +70,21 @@ public class FinanceSetupService {
             new DefaultAccount("6200", "Utilities Expense", AccountType.EXPENSE),
             new DefaultAccount("6900", "Miscellaneous Expense", AccountType.EXPENSE));
 
-    private static final Map<AccountMappingKey, String> DEFAULT_MAPPINGS = Map.of(
-            AccountMappingKey.INVENTORY, "1300",
-            AccountMappingKey.GOODS_RECEIVED_NOT_INVOICED, "2010",
-            AccountMappingKey.PROJECT_MATERIAL_COST, "5100",
-            AccountMappingKey.INVENTORY_ADJUSTMENT, "5900",
-            AccountMappingKey.COST_OF_SALES, "5000",
-            AccountMappingKey.OPENING_BALANCE_EQUITY, "3900",
-            AccountMappingKey.ACCOUNTS_PAYABLE, "2000",
-            AccountMappingKey.PURCHASE_PRICE_VARIANCE, "5150",
-            AccountMappingKey.CASH, "1000",
-            AccountMappingKey.BANK, "1010");
+    private static final Map<AccountMappingKey, String> DEFAULT_MAPPINGS = Map.ofEntries(
+            Map.entry(AccountMappingKey.INVENTORY, "1300"),
+            Map.entry(AccountMappingKey.GOODS_RECEIVED_NOT_INVOICED, "2010"),
+            Map.entry(AccountMappingKey.PROJECT_MATERIAL_COST, "5100"),
+            Map.entry(AccountMappingKey.INVENTORY_ADJUSTMENT, "5900"),
+            Map.entry(AccountMappingKey.COST_OF_SALES, "5000"),
+            Map.entry(AccountMappingKey.OPENING_BALANCE_EQUITY, "3900"),
+            Map.entry(AccountMappingKey.ACCOUNTS_PAYABLE, "2000"),
+            Map.entry(AccountMappingKey.PURCHASE_PRICE_VARIANCE, "5150"),
+            Map.entry(AccountMappingKey.CASH, "1000"),
+            Map.entry(AccountMappingKey.BANK, "1010"),
+            Map.entry(AccountMappingKey.ACCOUNTS_RECEIVABLE, "1100"),
+            Map.entry(AccountMappingKey.RETENTION_RECEIVABLE, "1110"),
+            Map.entry(AccountMappingKey.SALES_REVENUE, "4100"),
+            Map.entry(AccountMappingKey.CONTRACT_REVENUE, "4000"));
 
     private final AccountRepository accountRepository;
     private final AccountMappingRepository accountMappingRepository;

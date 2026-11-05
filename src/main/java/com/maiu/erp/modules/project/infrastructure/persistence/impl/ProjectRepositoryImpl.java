@@ -49,6 +49,8 @@ public class ProjectRepositoryImpl implements ProjectRepository {
         project.setStartDate(entity.getStartDate());
         project.setTargetEndDate(entity.getTargetEndDate());
         project.setBudgetAmount(entity.getBudgetAmount());
+        project.setContractAmount(entity.getContractAmount());
+        project.setRetentionRate(entity.getRetentionRate());
         project.setStatus(entity.getStatus());
         project.setCreatedAt(entity.getCreatedAt());
         project.setUpdatedAt(entity.getUpdatedAt());
@@ -65,6 +67,8 @@ public class ProjectRepositoryImpl implements ProjectRepository {
         entity.setStartDate(project.getStartDate());
         entity.setTargetEndDate(project.getTargetEndDate());
         entity.setBudgetAmount(project.getBudgetAmount());
+        entity.setContractAmount(project.getContractAmount());
+        entity.setRetentionRate(project.getRetentionRate());
         entity.setStatus(project.getStatus());
         entity.setCreatedAt(project.getCreatedAt());
         entity.setUpdatedAt(project.getUpdatedAt());

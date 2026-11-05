@@ -11,6 +11,8 @@ public enum JournalSourceType {
     OPENING_BALANCE,
     AP_BILL,
     AP_PAYMENT,
+    AR_INVOICE,
+    AR_RECEIPT,
     MANUAL,
     REVERSAL
 }

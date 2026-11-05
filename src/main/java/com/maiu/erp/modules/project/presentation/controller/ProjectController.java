@@ -152,6 +152,8 @@ public class ProjectController {
                 project.getStartDate(),
                 project.getTargetEndDate(),
                 project.getBudgetAmount(),
+                project.getContractAmount(),
+                project.getRetentionRate(),
                 project.getStatus(),
                 project.getCreatedAt(),
                 project.getUpdatedAt());
