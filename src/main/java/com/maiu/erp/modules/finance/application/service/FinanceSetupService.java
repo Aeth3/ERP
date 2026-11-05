@@ -62,6 +62,7 @@ public class FinanceSetupService {
             new DefaultAccount("5100", "Contract Costs - Materials", AccountType.EXPENSE),
             new DefaultAccount("5200", "Contract Costs - Labor", AccountType.EXPENSE),
             new DefaultAccount("5300", "Contract Costs - Equipment", AccountType.EXPENSE),
+            new DefaultAccount("5150", "Purchase Price Variance", AccountType.EXPENSE),
             new DefaultAccount("5400", "Contract Costs - Subcontract", AccountType.EXPENSE),
             new DefaultAccount("5900", "Inventory Adjustments", AccountType.EXPENSE),
             new DefaultAccount("6000", "Salaries and Wages", AccountType.EXPENSE),
@@ -75,7 +76,11 @@ public class FinanceSetupService {
             AccountMappingKey.PROJECT_MATERIAL_COST, "5100",
             AccountMappingKey.INVENTORY_ADJUSTMENT, "5900",
             AccountMappingKey.COST_OF_SALES, "5000",
-            AccountMappingKey.OPENING_BALANCE_EQUITY, "3900");
+            AccountMappingKey.OPENING_BALANCE_EQUITY, "3900",
+            AccountMappingKey.ACCOUNTS_PAYABLE, "2000",
+            AccountMappingKey.PURCHASE_PRICE_VARIANCE, "5150",
+            AccountMappingKey.CASH, "1000",
+            AccountMappingKey.BANK, "1010");
 
     private final AccountRepository accountRepository;
     private final AccountMappingRepository accountMappingRepository;

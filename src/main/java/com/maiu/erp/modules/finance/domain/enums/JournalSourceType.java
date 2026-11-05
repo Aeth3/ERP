@@ -9,6 +9,8 @@ public enum JournalSourceType {
     SALES_SHIPMENT,
     SALES_RETURN,
     OPENING_BALANCE,
+    AP_BILL,
+    AP_PAYMENT,
     MANUAL,
     REVERSAL
 }

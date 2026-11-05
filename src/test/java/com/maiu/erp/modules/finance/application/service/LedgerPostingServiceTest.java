@@ -207,7 +207,7 @@ class LedgerPostingServiceTest {
         setup.ensureDefaults();
         setup.ensureDefaults();
 
-        assertEquals(32, accountRepository.findAll().size());
+        assertEquals(33, accountRepository.findAll().size());
         assertEquals(customInventoryAccount, mappingRepository.findAccountId(AccountMappingKey.INVENTORY).orElseThrow());
         assertEquals(1, journalEntryRepository.entries.size());
         JournalEntry opening = journalEntryRepository.entries.getFirst();
