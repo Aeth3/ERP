@@ -29,8 +29,11 @@ import com.maiu.erp.modules.finance.domain.enums.AccountMappingKey;
 import com.maiu.erp.modules.finance.domain.enums.AccountType;
 import com.maiu.erp.modules.finance.domain.enums.InvoiceKind;
 import com.maiu.erp.modules.finance.domain.enums.InvoiceStatus;
+import com.maiu.erp.modules.finance.domain.enums.JournalEntryStatus;
+import com.maiu.erp.modules.finance.domain.enums.JournalSourceType;
 import com.maiu.erp.modules.finance.domain.model.Account;
 import com.maiu.erp.modules.finance.domain.model.Invoice;
+import com.maiu.erp.modules.finance.domain.model.JournalEntry;
 import com.maiu.erp.modules.finance.testsupport.InMemoryAccountMappingRepository;
 import com.maiu.erp.modules.finance.testsupport.InMemoryAccountRepository;
 import com.maiu.erp.modules.finance.testsupport.InMemoryFiscalPeriodRepository;
@@ -335,6 +338,236 @@ class ArInvoiceServiceTest {
         assertEquals(new BigDecimal("100.00"), summary.retentionHeld());
         assertEquals(new BigDecimal("40.00"), summary.retentionReleased());
         assertEquals(new BigDecimal("9000.00"), summary.remainingContract());
+    }
+
+    // --- approve / match ---
+
+    @Test
+    void approveBlocksUnshippedSalesOrder() {
+        SoFixture so = shippedSo("10.00", "25.00");
+        salesOrderReader.setStatus(so.soId(), "CONFIRMED");
+        Invoice invoice = service.createDraft(soRequest(so, List.of(soLine(so.itemId(), "1.00"))));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.approve(invoice.getId()));
+        assertTrue(ex.getMessage().toLowerCase().contains("shipped"));
+    }
+
+    @Test
+    void approveBlocksOverInvoiceIncludingRepeatedLines() {
+        SoFixture so = shippedSo("10.00", "25.00");
+
+        // Two lines of 6 in ONE invoice must not pass against 10 shipped.
+        Invoice invoice = service.createDraft(
+                soRequest(so, List.of(soLine(so.itemId(), "6.00"), soLine(so.itemId(), "6.00"))));
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.approve(invoice.getId()));
+        assertTrue(ex.getMessage().contains("Rebar 10mm"));
+    }
+
+    @Test
+    void returnsReduceInvoiceableOnApprove() {
+        SoFixture so = shippedSo("10.00", "25.00");
+        salesOrderReader.setReturnedQuantity(so.soId(), so.itemId(), new BigDecimal("3.00"));
+
+        Invoice first = service.createDraft(soRequest(so, List.of(soLine(so.itemId(), "5.00"))));
+        service.approve(first.getId());
+
+        Invoice second = service.createDraft(soRequest(so, List.of(soLine(so.itemId(), "3.00"))));
+        assertThrows(BadRequestException.class, () -> service.approve(second.getId()));
+    }
+
+    @Test
+    void approveBlocksOverContractCumulative() {
+        ProjectFixture project = activeProject("1500.00", "10.00");
+
+        Invoice first = service.createDraft(progressRequest(project, "1000.00"));
+        service.approve(first.getId());
+
+        Invoice second = service.createDraft(progressRequest(project, "600.00"));
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.approve(second.getId()));
+        assertTrue(ex.getMessage().toLowerCase().contains("contract"));
+    }
+
+    // --- postings ---
+
+    @Test
+    void postsSalesOrderInvoiceEntry() {
+        SoFixture so = shippedSo("10.00", "25.00");
+        Invoice invoice = service.createDraft(soRequest(so, List.of(soLine(so.itemId(), "4.00"))));
+
+        Invoice approved = service.approve(invoice.getId());
+
+        assertEquals(InvoiceStatus.APPROVED, approved.getStatus());
+        JournalEntry entry = journalEntryRepository.findById(approved.getJournalEntryId()).orElseThrow();
+        assertEquals(JournalSourceType.AR_INVOICE, entry.getSourceType());
+        assertEquals(invoice.getId(), entry.getSourceId());
+        assertEquals("Invoice ARI-202611-0001", entry.getMemo());
+        assertEquals(new BigDecimal("100.00"), debit(entry, AccountMappingKey.ACCOUNTS_RECEIVABLE));
+        assertEquals(new BigDecimal("100.00"), credit(entry, AccountMappingKey.SALES_REVENUE));
+    }
+
+    @Test
+    void postsProgressBillingWithRetentionSplit() {
+        ProjectFixture project = activeProject("10000.00", "10.00");
+        Invoice invoice = service.createDraft(progressRequest(project, "1000.00"));
+
+        Invoice approved = service.approve(invoice.getId());
+
+        JournalEntry entry = journalEntryRepository.findById(approved.getJournalEntryId()).orElseThrow();
+        assertEquals(new BigDecimal("900.00"), debit(entry, AccountMappingKey.ACCOUNTS_RECEIVABLE));
+        assertEquals(new BigDecimal("100.00"), debit(entry, AccountMappingKey.RETENTION_RECEIVABLE));
+        assertEquals(new BigDecimal("1000.00"), credit(entry, AccountMappingKey.CONTRACT_REVENUE));
+    }
+
+    @Test
+    void omitsZeroRetentionLine() {
+        ProjectFixture project = activeProject("10000.00", null);
+        Invoice invoice = service.createDraft(progressRequest(project, "500.00"));
+
+        Invoice approved = service.approve(invoice.getId());
+
+        JournalEntry entry = journalEntryRepository.findById(approved.getJournalEntryId()).orElseThrow();
+        UUID retentionAccountId = accountIds.get(AccountMappingKey.RETENTION_RECEIVABLE);
+        assertTrue(entry.getLines().stream().noneMatch(line -> retentionAccountId.equals(line.getAccountId())));
+        assertEquals(new BigDecimal("500.00"), debit(entry, AccountMappingKey.ACCOUNTS_RECEIVABLE));
+    }
+
+    @Test
+    void postsRetentionReleaseEntry() {
+        ProjectFixture project = activeProject("10000.00", "10.00");
+        Invoice billing = service.createDraft(progressRequest(project, "1000.00"));
+        service.approve(billing.getId());
+
+        Invoice release = service.releaseRetention(project.projectId(), INVOICE_DATE, null);
+        assertEquals(InvoiceKind.RETENTION_RELEASE, release.getKind());
+        assertEquals(InvoiceStatus.DRAFT, release.getStatus());
+        assertEquals(new BigDecimal("100.00"), release.getSubtotal());
+        assertEquals(project.customerId(), release.getCustomerId());
+        assertTrue(release.getLines().get(0).getDescription().contains("PRJ-7"));
+
+        Invoice approved = service.approve(release.getId());
+        JournalEntry entry = journalEntryRepository.findById(approved.getJournalEntryId()).orElseThrow();
+        assertEquals(new BigDecimal("100.00"), debit(entry, AccountMappingKey.ACCOUNTS_RECEIVABLE));
+        assertEquals(new BigDecimal("100.00"), credit(entry, AccountMappingKey.RETENTION_RECEIVABLE));
+    }
+
+    @Test
+    void approveLocksInvoice() {
+        SoFixture so = shippedSo("10.00", "25.00");
+        Invoice invoice = service.createDraft(soRequest(so, List.of(soLine(so.itemId(), "1.00"))));
+
+        int before = invoiceRepository.getForUpdateCalls();
+        service.approve(invoice.getId());
+        assertTrue(invoiceRepository.getForUpdateCalls() > before);
+    }
+
+    // --- cancel ---
+
+    @Test
+    void cancelDraftSkipsLedger() {
+        SoFixture so = shippedSo("10.00", "25.00");
+        Invoice invoice = service.createDraft(soRequest(so, List.of(soLine(so.itemId(), "1.00"))));
+
+        Invoice cancelled = service.cancel(invoice.getId());
+
+        assertEquals(InvoiceStatus.CANCELLED, cancelled.getStatus());
+        assertTrue(cancelled.getJournalEntryId() == null);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.cancel(invoice.getId()));
+        assertTrue(ex.getMessage().toLowerCase().contains("already cancelled"));
+    }
+
+    @Test
+    void cancelApprovedReverses() {
+        SoFixture so = shippedSo("10.00", "25.00");
+        Invoice invoice = service.createDraft(soRequest(so, List.of(soLine(so.itemId(), "1.00"))));
+        Invoice approved = service.approve(invoice.getId());
+
+        Invoice cancelled = service.cancel(approved.getId());
+
+        assertEquals(InvoiceStatus.CANCELLED, cancelled.getStatus());
+        JournalEntry original = journalEntryRepository.findById(approved.getJournalEntryId()).orElseThrow();
+        assertEquals(JournalEntryStatus.REVERSED, original.getStatus());
+    }
+
+    @Test
+    void cancelRejectsWhenReceipted() {
+        SoFixture so = shippedSo("10.00", "25.00");
+        Invoice invoice = service.createDraft(soRequest(so, List.of(soLine(so.itemId(), "1.00"))));
+        Invoice approved = service.approve(invoice.getId());
+        approved.setAmountReceived(new BigDecimal("10.00"));
+        approved.setStatus(InvoiceStatus.PARTIALLY_PAID);
+        invoiceRepository.save(approved);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.cancel(approved.getId()));
+        assertTrue(ex.getMessage().toLowerCase().contains("receipt"));
+    }
+
+    // --- retention release ---
+
+    @Test
+    void releaseRetentionComputesReleasable() {
+        ProjectFixture project = activeProject("10000.00", "10.00");
+        Invoice first = service.createDraft(progressRequest(project, "1000.00"));
+        service.approve(first.getId());
+        Invoice second = service.createDraft(progressRequest(project, "500.00"));
+        service.approve(second.getId());
+
+        Invoice release = service.releaseRetention(project.projectId(), INVOICE_DATE, null);
+        assertEquals(new BigDecimal("150.00"), release.getSubtotal());
+
+        // A cancelled release restores the releasable amount.
+        service.cancel(release.getId());
+        Invoice secondRelease = service.releaseRetention(project.projectId(), INVOICE_DATE, null);
+        assertEquals(new BigDecimal("150.00"), secondRelease.getSubtotal());
+    }
+
+    @Test
+    void releaseRetentionRejectsZero() {
+        ProjectFixture project = activeProject("10000.00", "10.00");
+
+        assertThrows(BadRequestException.class,
+                () -> service.releaseRetention(project.projectId(), INVOICE_DATE, null));
+
+        Invoice billing = service.createDraft(progressRequest(project, "1000.00"));
+        service.approve(billing.getId());
+        Invoice release = service.releaseRetention(project.projectId(), INVOICE_DATE, null);
+        service.approve(release.getId());
+
+        assertThrows(BadRequestException.class,
+                () -> service.releaseRetention(project.projectId(), INVOICE_DATE, null));
+    }
+
+    @Test
+    void approveReleaseRejectsWhenDoubleDrafted() {
+        ProjectFixture project = activeProject("10000.00", "10.00");
+        Invoice billing = service.createDraft(progressRequest(project, "1000.00"));
+        service.approve(billing.getId());
+
+        Invoice firstDraft = service.releaseRetention(project.projectId(), INVOICE_DATE, null);
+        Invoice secondDraft = service.releaseRetention(project.projectId(), INVOICE_DATE, null);
+
+        service.approve(firstDraft.getId());
+        assertThrows(BadRequestException.class, () -> service.approve(secondDraft.getId()));
+    }
+
+    // --- helpers ---
+
+    private BigDecimal debit(JournalEntry entry, AccountMappingKey key) {
+        UUID accountId = accountIds.get(key);
+        return entry.getLines().stream()
+                .filter(line -> accountId.equals(line.getAccountId()))
+                .map(line -> line.getDebit() == null ? BigDecimal.ZERO : line.getDebit())
+                .filter(value -> value.signum() != 0)
+                .findFirst().orElse(BigDecimal.ZERO);
+    }
+
+    private BigDecimal credit(JournalEntry entry, AccountMappingKey key) {
+        UUID accountId = accountIds.get(key);
+        return entry.getLines().stream()
+                .filter(line -> accountId.equals(line.getAccountId()))
+                .map(line -> line.getCredit() == null ? BigDecimal.ZERO : line.getCredit())
+                .filter(value -> value.signum() != 0)
+                .findFirst().orElse(BigDecimal.ZERO);
     }
 
     // --- stubs ---

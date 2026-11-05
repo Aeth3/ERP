@@ -20,10 +20,14 @@ import com.maiu.erp.modules.finance.application.port.ProjectBillingReader.Projec
 import com.maiu.erp.modules.finance.application.port.SalesOrderReader;
 import com.maiu.erp.modules.finance.application.port.SalesOrderReader.SoLine;
 import com.maiu.erp.modules.finance.application.port.SalesOrderReader.SoSnapshot;
+import com.maiu.erp.modules.finance.domain.enums.AccountMappingKey;
 import com.maiu.erp.modules.finance.domain.enums.InvoiceKind;
 import com.maiu.erp.modules.finance.domain.enums.InvoiceStatus;
+import com.maiu.erp.modules.finance.domain.enums.JournalSourceType;
 import com.maiu.erp.modules.finance.domain.model.Invoice;
 import com.maiu.erp.modules.finance.domain.model.InvoiceLine;
+import com.maiu.erp.modules.finance.domain.model.JournalEntry;
+import com.maiu.erp.modules.finance.domain.model.JournalLine;
 import com.maiu.erp.modules.finance.domain.repository.AccountMappingRepository;
 import com.maiu.erp.modules.finance.domain.repository.InvoiceRepository;
 import com.maiu.erp.shared.exception.BadRequestException;
@@ -108,17 +112,206 @@ public class ArInvoiceService {
 
     @Transactional
     public Invoice approve(UUID id) {
-        throw new UnsupportedOperationException("Implemented in a later task");
+        Invoice invoice = getForUpdate(id);
+        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+            throw new BadRequestException("Only draft invoices can be approved");
+        }
+
+        switch (invoice.getKind()) {
+            case SALES_ORDER -> matchAgainstSalesOrder(invoice);
+            case PROGRESS_BILLING -> matchAgainstContract(invoice);
+            case RETENTION_RELEASE -> matchAgainstReleasable(invoice);
+        }
+
+        JournalEntry posted = ledgerPostingService.post(entryFor(invoice));
+        invoice.setJournalEntryId(posted.getId());
+        invoice.setStatus(InvoiceStatus.APPROVED);
+        return invoiceRepository.save(invoice);
     }
 
     @Transactional
     public Invoice cancel(UUID id) {
-        throw new UnsupportedOperationException("Implemented in a later task");
+        Invoice invoice = getForUpdate(id);
+        switch (invoice.getStatus()) {
+            case DRAFT -> invoice.setStatus(InvoiceStatus.CANCELLED);
+            case APPROVED -> {
+                if (invoice.getAmountReceived() != null && invoice.getAmountReceived().signum() != 0) {
+                    throw new BadRequestException(
+                            "Invoice " + invoice.getInvoiceNumber() + " has receipts and cannot be cancelled");
+                }
+                ledgerPostingService.reverse(
+                        invoice.getJournalEntryId(),
+                        LocalDate.now(businessZone),
+                        "Cancel invoice " + invoice.getInvoiceNumber(),
+                        CurrentActor.name());
+                invoice.setStatus(InvoiceStatus.CANCELLED);
+            }
+            case CANCELLED -> throw new BadRequestException(
+                    "Invoice " + invoice.getInvoiceNumber() + " is already cancelled");
+            default -> throw new BadRequestException(
+                    "Invoice " + invoice.getInvoiceNumber() + " has receipts and cannot be cancelled");
+        }
+        return invoiceRepository.save(invoice);
     }
 
     @Transactional
     public Invoice releaseRetention(UUID projectId, LocalDate invoiceDate, LocalDate dueDate) {
-        throw new UnsupportedOperationException("Implemented in a later task");
+        ProjectSnapshot snapshot = projectBillingReader.find(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+        if (invoiceDate == null) {
+            throw new BadRequestException("Invoice date is required");
+        }
+        BigDecimal releasable = releasableRetention(projectId, null);
+        if (releasable.signum() <= 0) {
+            throw new BadRequestException(
+                    "Project " + snapshot.projectCode() + " has no retention left to release");
+        }
+
+        Invoice invoice = new Invoice();
+        invoice.setKind(InvoiceKind.RETENTION_RELEASE);
+        invoice.setCustomerId(snapshot.customerId());
+        invoice.setProjectId(projectId);
+        invoice.setInvoiceDate(invoiceDate);
+        invoice.setDueDate(dueDate);
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        invoice.setSubtotal(releasable);
+        invoice.setRetentionAmount(BigDecimal.ZERO);
+        invoice.setTotal(releasable);
+        invoice.setAmountReceived(BigDecimal.ZERO);
+        invoice.setCreatedBy(CurrentActor.name());
+        invoice.setCreatedAt(Instant.now());
+        InvoiceLine line = new InvoiceLine();
+        line.setLineNumber(1);
+        line.setDescription("Retention release — " + snapshot.projectCode());
+        line.setLineTotal(releasable);
+        invoice.setLines(List.of(line));
+        invoice.setInvoiceNumber(nextInvoiceNumber(invoiceDate));
+        return invoiceRepository.save(invoice);
+    }
+
+    // --- matching ---
+
+    private void matchAgainstSalesOrder(Invoice invoice) {
+        SoSnapshot snapshot = salesOrderReader.find(invoice.getSalesOrderId())
+                .orElseThrow(() -> new NotFoundException("Sales order not found"));
+        if (!"SHIPPED".equals(snapshot.status()) && !"DELIVERED".equals(snapshot.status())) {
+            throw new BadRequestException(
+                    "Sales order " + snapshot.soNumber() + " has not been shipped");
+        }
+        if (!snapshot.customerId().equals(invoice.getCustomerId())) {
+            throw new BadRequestException("Invoice customer does not match the sales order customer");
+        }
+
+        Map<UUID, SoLine> soLines = soLinesByItemId(snapshot);
+        Map<UUID, BigDecimal> alreadyInvoiced = invoicedQuantities(invoice.getSalesOrderId(), invoice.getId());
+        for (InvoiceLine line : invoice.getLines()) {
+            SoLine soLine = soLines.get(line.getSalesOrderItemId());
+            if (soLine == null) {
+                throw new BadRequestException("Invoice line does not reference an item of the sales order");
+            }
+            BigDecimal invoiceable = soLine.quantity().subtract(soLine.returnedQuantity());
+            // merge() keeps repeated lines for the same SO item cumulative within this invoice too.
+            BigDecimal cumulative = alreadyInvoiced.merge(
+                    line.getSalesOrderItemId(), line.getQuantity(), BigDecimal::add);
+            if (cumulative.compareTo(invoiceable) > 0) {
+                throw new BadRequestException(
+                        "Invoiced quantity would exceed the shipped quantity (net of returns) for "
+                                + soLine.productName());
+            }
+        }
+    }
+
+    private void matchAgainstContract(Invoice invoice) {
+        ProjectSnapshot snapshot = projectBillingReader.find(invoice.getProjectId())
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+        if (snapshot.contractAmount() == null) {
+            throw new BadRequestException(
+                    "Project " + snapshot.projectCode() + " has no contract amount to bill against");
+        }
+        BigDecimal billed = BigDecimal.ZERO;
+        for (Invoice other : invoiceRepository.findByProjectId(invoice.getProjectId())) {
+            if (other.getStatus() == InvoiceStatus.CANCELLED
+                    || other.getId().equals(invoice.getId())
+                    || other.getKind() != InvoiceKind.PROGRESS_BILLING) {
+                continue;
+            }
+            billed = billed.add(other.getSubtotal());
+        }
+        if (billed.add(invoice.getSubtotal()).compareTo(snapshot.contractAmount()) > 0) {
+            throw new BadRequestException(
+                    "Billing would exceed the contract amount for project " + snapshot.projectCode());
+        }
+    }
+
+    private void matchAgainstReleasable(Invoice invoice) {
+        BigDecimal releasable = releasableRetention(invoice.getProjectId(), invoice.getId());
+        if (invoice.getSubtotal().compareTo(releasable) > 0) {
+            throw new BadRequestException("Release would exceed the retention held for the project");
+        }
+    }
+
+    /** Retention held on approved billings minus already-released amounts, excluding one invoice if given. */
+    private BigDecimal releasableRetention(UUID projectId, UUID excludedInvoiceId) {
+        BigDecimal held = BigDecimal.ZERO;
+        BigDecimal released = BigDecimal.ZERO;
+        for (Invoice invoice : invoiceRepository.findByProjectId(projectId)) {
+            if (invoice.getStatus() == InvoiceStatus.CANCELLED || invoice.getId().equals(excludedInvoiceId)) {
+                continue;
+            }
+            if (invoice.getKind() == InvoiceKind.PROGRESS_BILLING && invoice.getStatus() != InvoiceStatus.DRAFT) {
+                held = held.add(invoice.getRetentionAmount());
+            } else if (invoice.getKind() == InvoiceKind.RETENTION_RELEASE && invoice.getStatus() != InvoiceStatus.DRAFT) {
+                released = released.add(invoice.getSubtotal());
+            }
+        }
+        return held.subtract(released);
+    }
+
+    // --- posting ---
+
+    private JournalEntry entryFor(Invoice invoice) {
+        List<JournalLine> lines = new ArrayList<>();
+        switch (invoice.getKind()) {
+            case SALES_ORDER -> {
+                lines.add(journalLine(mappedAccount(AccountMappingKey.ACCOUNTS_RECEIVABLE), invoice.getTotal(), null));
+                lines.add(journalLine(mappedAccount(AccountMappingKey.SALES_REVENUE), null, invoice.getTotal()));
+            }
+            case PROGRESS_BILLING -> {
+                lines.add(journalLine(mappedAccount(AccountMappingKey.ACCOUNTS_RECEIVABLE), invoice.getTotal(), null));
+                if (invoice.getRetentionAmount() != null && invoice.getRetentionAmount().signum() > 0) {
+                    lines.add(journalLine(
+                            mappedAccount(AccountMappingKey.RETENTION_RECEIVABLE), invoice.getRetentionAmount(), null));
+                }
+                lines.add(journalLine(mappedAccount(AccountMappingKey.CONTRACT_REVENUE), null, invoice.getSubtotal()));
+            }
+            case RETENTION_RELEASE -> {
+                lines.add(journalLine(mappedAccount(AccountMappingKey.ACCOUNTS_RECEIVABLE), invoice.getTotal(), null));
+                lines.add(journalLine(
+                        mappedAccount(AccountMappingKey.RETENTION_RECEIVABLE), null, invoice.getTotal()));
+            }
+        }
+
+        JournalEntry draft = new JournalEntry();
+        draft.setEntryDate(invoice.getInvoiceDate());
+        draft.setSourceType(JournalSourceType.AR_INVOICE);
+        draft.setSourceId(invoice.getId());
+        draft.setMemo("Invoice " + invoice.getInvoiceNumber());
+        draft.setCreatedBy(CurrentActor.name());
+        draft.setLines(lines);
+        return draft;
+    }
+
+    private JournalLine journalLine(UUID accountId, BigDecimal debit, BigDecimal credit) {
+        JournalLine line = new JournalLine();
+        line.setAccountId(accountId);
+        line.setDebit(debit);
+        line.setCredit(credit);
+        return line;
+    }
+
+    private UUID mappedAccount(AccountMappingKey key) {
+        return accountMappingRepository.findAccountId(key)
+                .orElseThrow(() -> new BadRequestException("No account mapped for " + key));
     }
 
     public Invoice get(UUID id) {
