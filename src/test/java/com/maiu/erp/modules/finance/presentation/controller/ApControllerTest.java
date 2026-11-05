@@ -144,6 +144,19 @@ class ApControllerTest {
     }
 
     @Test
+    void billableLinesReturnsRemainingQuantities() throws Exception {
+        UUID poId = UUID.randomUUID();
+        when(billService.billableLines(poId)).thenReturn(List.of(new ApBillService.BillableLine(
+                UUID.randomUUID(), UUID.randomUUID(), "Rebar 10mm", new BigDecimal("10.00"),
+                new BigDecimal("3.00"), new BigDecimal("5.00"), new BigDecimal("2.00"), new BigDecimal("20.00"))));
+
+        mockMvc.perform(get("/finance/ap/billable").param("purchaseOrderId", poId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].productName").value("Rebar 10mm"))
+                .andExpect(jsonPath("$[0].remainingQuantity").value(2.00));
+    }
+
+    @Test
     void getBillReturnsIt() throws Exception {
         UUID billId = UUID.randomUUID();
         Bill bill = new Bill();

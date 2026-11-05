@@ -86,6 +86,9 @@ public class ApPaymentService {
             if (allocation.amount() == null || allocation.amount().signum() <= 0) {
                 throw new BadRequestException("Allocation amount must be positive");
             }
+            if (allocation.amount().stripTrailingZeros().scale() > 2) {
+                throw new BadRequestException("Allocation amount must have at most two decimal places");
+            }
             Bill bill = billsById.computeIfAbsent(allocation.billId(), id -> billRepository.findByIdForUpdate(id)
                     .orElseThrow(() -> new NotFoundException("Bill not found")));
             if (!request.supplierId().equals(bill.getSupplierId())) {

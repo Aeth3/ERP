@@ -18,13 +18,16 @@ import com.maiu.erp.modules.finance.application.port.PurchaseOrderReader;
 import com.maiu.erp.modules.finance.application.port.PurchaseOrderReader.PoLine;
 import com.maiu.erp.modules.finance.application.port.PurchaseOrderReader.PoSnapshot;
 import com.maiu.erp.modules.finance.domain.enums.AccountMappingKey;
+import com.maiu.erp.modules.finance.domain.enums.AccountType;
 import com.maiu.erp.modules.finance.domain.enums.BillStatus;
 import com.maiu.erp.modules.finance.domain.enums.JournalSourceType;
+import com.maiu.erp.modules.finance.domain.model.Account;
 import com.maiu.erp.modules.finance.domain.model.Bill;
 import com.maiu.erp.modules.finance.domain.model.BillLine;
 import com.maiu.erp.modules.finance.domain.model.JournalEntry;
 import com.maiu.erp.modules.finance.domain.model.JournalLine;
 import com.maiu.erp.modules.finance.domain.repository.AccountMappingRepository;
+import com.maiu.erp.modules.finance.domain.repository.AccountRepository;
 import com.maiu.erp.modules.finance.domain.repository.BillRepository;
 import com.maiu.erp.shared.exception.BadRequestException;
 import com.maiu.erp.shared.exception.ConflictException;
@@ -44,6 +47,7 @@ public class ApBillService {
     private final PurchaseOrderReader purchaseOrderReader;
     private final LedgerPostingService ledgerPostingService;
     private final AccountMappingRepository accountMappingRepository;
+    private final AccountRepository accountRepository;
     private final ZoneId businessZone;
 
     public ApBillService(
@@ -51,11 +55,13 @@ public class ApBillService {
             PurchaseOrderReader purchaseOrderReader,
             LedgerPostingService ledgerPostingService,
             AccountMappingRepository accountMappingRepository,
+            AccountRepository accountRepository,
             @Value("${finance.time-zone:Asia/Manila}") String businessZone) {
         this.billRepository = billRepository;
         this.purchaseOrderReader = purchaseOrderReader;
         this.ledgerPostingService = ledgerPostingService;
         this.accountMappingRepository = accountMappingRepository;
+        this.accountRepository = accountRepository;
         this.businessZone = ZoneId.of(businessZone);
     }
 
@@ -140,7 +146,8 @@ public class ApBillService {
             case DRAFT -> bill.setStatus(BillStatus.CANCELLED);
             case APPROVED -> {
                 if (bill.getAmountPaid() != null && bill.getAmountPaid().signum() != 0) {
-                    throw new BadRequestException("A bill with payments cannot be cancelled");
+                    throw new BadRequestException(
+                            "Bill " + bill.getBillNumber() + " has payments and cannot be cancelled");
                 }
                 ledgerPostingService.reverse(
                         bill.getJournalEntryId(),
@@ -149,7 +156,10 @@ public class ApBillService {
                         CurrentActor.name());
                 bill.setStatus(BillStatus.CANCELLED);
             }
-            default -> throw new BadRequestException("A bill with payments cannot be cancelled");
+            case CANCELLED -> throw new BadRequestException(
+                    "Bill " + bill.getBillNumber() + " is already cancelled");
+            default -> throw new BadRequestException(
+                    "Bill " + bill.getBillNumber() + " has payments and cannot be cancelled");
         }
         return billRepository.save(bill);
     }
@@ -164,6 +174,55 @@ public class ApBillService {
 
     private static String billNumberOf(CreateBillRequest request) {
         return request.billNumber() == null ? null : request.billNumber().trim();
+    }
+
+    private static void requireMoneyScale(BigDecimal value, String field) {
+        if (value.stripTrailingZeros().scale() > MONEY_SCALE) {
+            throw new BadRequestException("Line " + field + " must have at most two decimal places");
+        }
+    }
+
+    public record BillableLine(
+            UUID poItemId,
+            UUID productId,
+            String productName,
+            BigDecimal orderedQuantity,
+            BigDecimal returnedQuantity,
+            BigDecimal billedQuantity,
+            BigDecimal remainingQuantity,
+            BigDecimal unitCost) {
+    }
+
+    /** What is still billable on a PO: ordered minus returned minus already billed, per item. */
+    public List<BillableLine> billableLines(UUID purchaseOrderId) {
+        PoSnapshot snapshot = purchaseOrderReader.find(purchaseOrderId)
+                .orElseThrow(() -> new NotFoundException("Purchase order not found"));
+
+        Map<UUID, BigDecimal> billed = new HashMap<>();
+        for (Bill other : billRepository.findByPurchaseOrderId(purchaseOrderId)) {
+            if (other.getStatus() == BillStatus.CANCELLED) {
+                continue;
+            }
+            for (BillLine line : other.getLines()) {
+                billed.merge(line.getPurchaseOrderItemId(), line.getQuantity(), BigDecimal::add);
+            }
+        }
+
+        List<BillableLine> lines = new ArrayList<>();
+        for (PoLine poLine : snapshot.lines()) {
+            BigDecimal billedQuantity = billed.getOrDefault(poLine.poItemId(), BigDecimal.ZERO);
+            BigDecimal remaining = poLine.quantity().subtract(poLine.returnedQuantity()).subtract(billedQuantity);
+            lines.add(new BillableLine(
+                    poLine.poItemId(),
+                    poLine.productId(),
+                    poLine.productName(),
+                    poLine.quantity(),
+                    poLine.returnedQuantity(),
+                    billedQuantity,
+                    remaining.max(BigDecimal.ZERO),
+                    poLine.unitCost()));
+        }
+        return lines;
     }
 
     public List<Bill> search(UUID supplierId, BillStatus status, UUID purchaseOrderId) {
@@ -204,6 +263,8 @@ public class ApBillService {
                 if (line.unitCost() == null || line.unitCost().signum() < 0) {
                     throw new BadRequestException("Line unit cost must not be negative");
                 }
+                requireMoneyScale(line.quantity(), "quantity");
+                requireMoneyScale(line.unitCost(), "unit cost");
             } else {
                 if (line.accountId() == null || line.purchaseOrderItemId() != null) {
                     throw new BadRequestException(
@@ -211,6 +272,13 @@ public class ApBillService {
                 }
                 if (line.amount() == null || line.amount().signum() <= 0) {
                     throw new BadRequestException("Line amount must be positive");
+                }
+                requireMoneyScale(line.amount(), "amount");
+                Account account = accountRepository.findById(line.accountId())
+                        .orElseThrow(() -> new BadRequestException("Unknown account on bill line"));
+                if (account.getType() != AccountType.EXPENSE) {
+                    throw new BadRequestException(
+                            "Account " + account.getCode() + " is not an expense account");
                 }
             }
         }
@@ -298,8 +366,8 @@ public class ApBillService {
                     line.getPurchaseOrderItemId(), line.getQuantity(), BigDecimal::add);
             if (cumulative.compareTo(billable) > 0) {
                 throw new BadRequestException(
-                        "Billed quantity would exceed the billable quantity (ordered minus returned) for product "
-                                + poLine.productId());
+                        "Billed quantity would exceed the billable quantity (ordered minus returned) for "
+                                + poLine.productName());
             }
         }
     }

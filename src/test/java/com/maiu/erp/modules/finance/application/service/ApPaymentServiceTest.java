@@ -166,6 +166,17 @@ class ApPaymentServiceTest {
                 List.of(new AllocationReq(bill.getId(), new BigDecimal("31.00"))))));
     }
 
+    // --- minors cleanup pass ---
+
+    @Test
+    void create_rejectsAllocationWithMoreThanTwoDecimals() {
+        Bill bill = approvedBill(UUID.randomUUID(), "100.00", "0.00");
+
+        assertThrows(BadRequestException.class, () -> service.create(new CreatePaymentRequest(
+                bill.getSupplierId(), PAY_DATE, PaymentMethod.BANK, null,
+                List.of(new AllocationReq(bill.getId(), new BigDecimal("40.005"))))));
+    }
+
     // --- review-pass regressions ---
 
     @Test

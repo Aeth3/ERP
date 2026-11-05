@@ -83,6 +83,11 @@ public class ApController {
         return ResponseEntity.ok(paymentService.get(id));
     }
 
+    @GetMapping("/billable")
+    public ResponseEntity<List<ApBillService.BillableLine>> billableLines(@RequestParam UUID purchaseOrderId) {
+        return ResponseEntity.ok(billService.billableLines(purchaseOrderId));
+    }
+
     @GetMapping("/aging")
     public ResponseEntity<List<ApAgingService.AgingRow>> aging() {
         return ResponseEntity.ok(agingService.aging());

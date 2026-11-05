@@ -16,7 +16,7 @@ public interface PurchaseOrderReader {
     record PoSnapshot(UUID id, String poNumber, UUID supplierId, String status, List<PoLine> lines) {
     }
 
-    record PoLine(UUID poItemId, UUID productId, BigDecimal quantity, BigDecimal returnedQuantity,
-            BigDecimal unitCost) {
+    record PoLine(UUID poItemId, UUID productId, String productName, BigDecimal quantity,
+            BigDecimal returnedQuantity, BigDecimal unitCost) {
     }
 }

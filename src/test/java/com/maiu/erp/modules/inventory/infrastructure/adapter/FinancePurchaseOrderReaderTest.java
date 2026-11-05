@@ -13,10 +13,12 @@ import org.mockito.Mockito;
 
 import com.maiu.erp.modules.finance.application.port.PurchaseOrderReader;
 import com.maiu.erp.modules.inventory.domain.enums.PurchaseOrderStatus;
+import com.maiu.erp.modules.inventory.domain.model.Product;
 import com.maiu.erp.modules.inventory.domain.model.PurchaseOrder;
 import com.maiu.erp.modules.inventory.domain.model.PurchaseOrderItem;
 import com.maiu.erp.modules.inventory.domain.model.PurchaseReturn;
 import com.maiu.erp.modules.inventory.domain.model.PurchaseReturnItem;
+import com.maiu.erp.modules.inventory.domain.repository.ProductRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseOrderItemRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseOrderRepository;
 import com.maiu.erp.modules.inventory.domain.repository.PurchaseReturnItemRepository;
@@ -27,9 +29,10 @@ class FinancePurchaseOrderReaderTest {
     private final PurchaseOrderItemRepository poItemRepository = Mockito.mock(PurchaseOrderItemRepository.class);
     private final PurchaseReturnRepository returnRepository = Mockito.mock(PurchaseReturnRepository.class);
     private final PurchaseReturnItemRepository returnItemRepository = Mockito.mock(PurchaseReturnItemRepository.class);
+    private final ProductRepository productRepository = Mockito.mock(ProductRepository.class);
 
     private final FinancePurchaseOrderReader reader = new FinancePurchaseOrderReader(
-            poRepository, poItemRepository, returnRepository, returnItemRepository);
+            poRepository, poItemRepository, returnRepository, returnItemRepository, productRepository);
 
     @Test
     void returnsEmptyForUnknownPurchaseOrder() {
@@ -84,6 +87,48 @@ class FinancePurchaseOrderReaderTest {
         PurchaseOrderReader.PoLine lineB = snapshot.lines().stream()
                 .filter(line -> line.productId().equals(productB)).findFirst().orElseThrow();
         assertEquals(BigDecimal.ZERO, lineB.returnedQuantity());
+    }
+
+    @Test
+    void snapshotNamesProductsAndAllocatesReturnsAcrossDuplicateProductItems() {
+        UUID poId = UUID.randomUUID();
+        UUID supplierId = UUID.randomUUID();
+        UUID productA = UUID.randomUUID();
+
+        PurchaseOrder po = new PurchaseOrder();
+        po.setId(poId);
+        po.setPoNumber("PO-88");
+        po.setSupplierId(supplierId);
+        po.setStatus(PurchaseOrderStatus.RECEIVED);
+        Mockito.when(poRepository.findById(poId)).thenReturn(Optional.of(po));
+
+        // Same product on two PO items: 10 then 4; 12 returned in total.
+        PurchaseOrderItem first = poItem(poId, productA, "10.00", "20.00");
+        PurchaseOrderItem second = poItem(poId, productA, "4.00", "21.00");
+        Mockito.when(poItemRepository.findByPurchaseOrderId(poId)).thenReturn(List.of(first, second));
+
+        PurchaseReturn purchaseReturn = new PurchaseReturn();
+        purchaseReturn.setId(UUID.randomUUID());
+        Mockito.when(returnRepository.findByPurchaseOrderId(poId)).thenReturn(List.of(purchaseReturn));
+        Mockito.when(returnItemRepository.findByPurchaseReturnId(purchaseReturn.getId()))
+                .thenReturn(List.of(returnItem(productA, "12.00")));
+
+        Product product = new Product();
+        product.setId(productA);
+        product.setName("Cement 40kg");
+        Mockito.when(productRepository.findById(productA)).thenReturn(Optional.of(product));
+
+        PurchaseOrderReader.PoSnapshot snapshot = reader.find(poId).orElseThrow();
+
+        PurchaseOrderReader.PoLine lineOne = snapshot.lines().stream()
+                .filter(line -> line.poItemId().equals(first.getId())).findFirst().orElseThrow();
+        PurchaseOrderReader.PoLine lineTwo = snapshot.lines().stream()
+                .filter(line -> line.poItemId().equals(second.getId())).findFirst().orElseThrow();
+
+        assertEquals("Cement 40kg", lineOne.productName());
+        // Returned 12 fills the first item's 10, then 2 against the second.
+        assertEquals(new BigDecimal("10.00"), lineOne.returnedQuantity());
+        assertEquals(new BigDecimal("2.00"), lineTwo.returnedQuantity());
     }
 
     private PurchaseOrderItem poItem(UUID poId, UUID productId, String quantity, String unitCost) {

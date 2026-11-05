@@ -74,7 +74,8 @@ class ApBillServiceTest {
         LedgerPostingService ledgerPostingService = new LedgerPostingService(
                 accountRepository, journalEntryRepository, new FiscalPeriodService(fiscalPeriodRepository));
         service = new ApBillService(
-                billRepository, purchaseOrderReader, ledgerPostingService, mappingRepository, "Asia/Manila");
+                billRepository, purchaseOrderReader, ledgerPostingService, mappingRepository, accountRepository,
+                "Asia/Manila");
     }
 
     @AfterEach
@@ -312,6 +313,69 @@ class ApBillServiceTest {
                 request(supplierId, null, " inv-9 ", List.of(expenseLine("20.00")))));
     }
 
+    // --- minors cleanup pass ---
+
+    @Test
+    void createDraft_rejectsNonExpenseAccountOnExpenseLine() {
+        UUID apAccountId = accountIds.get(AccountMappingKey.ACCOUNTS_PAYABLE);
+        LineReq liabilityLine = new LineReq(null, null, null, apAccountId, new BigDecimal("50.00"), "wrong");
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.createDraft(
+                request(UUID.randomUUID(), null, "INV-1", List.of(liabilityLine))));
+        assertTrue(ex.getMessage().toLowerCase().contains("expense"));
+    }
+
+    @Test
+    void createDraft_rejectsAmountsWithMoreThanTwoDecimals() {
+        PoFixture po = receivedPo("10.00", "20.00");
+
+        assertThrows(BadRequestException.class, () -> service.createDraft(
+                request(UUID.randomUUID(), null, "INV-1", List.of(expenseLine("10.005")))));
+        assertThrows(BadRequestException.class, () -> service.createDraft(
+                request(po.supplierId(), po.poId(), "INV-2", List.of(poLine(po.itemId(), "1.005", "20.00")))));
+        assertThrows(BadRequestException.class, () -> service.createDraft(
+                request(po.supplierId(), po.poId(), "INV-3", List.of(poLine(po.itemId(), "1.00", "20.005")))));
+    }
+
+    @Test
+    void cancel_alreadyCancelledBillGetsDistinctMessage() {
+        Bill bill = service.createDraft(request(UUID.randomUUID(), null, "INV-1", List.of(expenseLine("10.00"))));
+        service.cancel(bill.getId());
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.cancel(bill.getId()));
+        assertTrue(ex.getMessage().toLowerCase().contains("already cancelled"));
+    }
+
+    @Test
+    void approve_overBillingErrorNamesTheProduct() {
+        PoFixture po = receivedPo("10.00", "20.00");
+        Bill bill = service.createDraft(
+                request(po.supplierId(), po.poId(), "INV-1", List.of(poLine(po.itemId(), "11.00", "20.00"))));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.approve(bill.getId()));
+        assertTrue(ex.getMessage().contains("Rebar 10mm"));
+    }
+
+    @Test
+    void billableLines_reportRemainingNetOfReturnsAndBilledQuantity() {
+        PoFixture po = receivedPo("10.00", "20.00");
+        purchaseOrderReader.setReturnedQuantity(po.poId(), po.itemId(), new BigDecimal("3.00"));
+        Bill bill = service.createDraft(
+                request(po.supplierId(), po.poId(), "INV-1", List.of(poLine(po.itemId(), "5.00", "20.00"))));
+        service.approve(bill.getId());
+
+        List<ApBillService.BillableLine> lines = service.billableLines(po.poId());
+
+        assertEquals(1, lines.size());
+        ApBillService.BillableLine line = lines.get(0);
+        assertEquals(po.itemId(), line.poItemId());
+        assertEquals("Rebar 10mm", line.productName());
+        assertEquals(new BigDecimal("10.00"), line.orderedQuantity());
+        assertEquals(new BigDecimal("3.00"), line.returnedQuantity());
+        assertEquals(new BigDecimal("5.00"), line.billedQuantity());
+        assertEquals(new BigDecimal("2.00"), line.remainingQuantity());
+    }
+
     // --- helpers ---
 
     private CreateBillRequest request(UUID supplierId, UUID poId, String billNumber, List<LineReq> lines) {
@@ -367,7 +431,7 @@ class ApBillServiceTest {
         purchaseOrderReader.add(new PurchaseOrderReader.PoSnapshot(
                 poId, "PO-" + poId.toString().substring(0, 4), supplierId, "RECEIVED",
                 List.of(new PurchaseOrderReader.PoLine(
-                        itemId, UUID.randomUUID(), new BigDecimal(quantity), BigDecimal.ZERO,
+                        itemId, UUID.randomUUID(), "Rebar 10mm", new BigDecimal(quantity), BigDecimal.ZERO,
                         new BigDecimal(unitCost)))));
         return new PoFixture(poId, itemId, supplierId);
     }
@@ -393,8 +457,8 @@ class ApBillServiceTest {
             List<PoLine> lines = new ArrayList<>();
             for (PoLine line : current.lines()) {
                 lines.add(poItemId.equals(line.poItemId())
-                        ? new PoLine(line.poItemId(), line.productId(), line.quantity(), returnedQuantity,
-                                line.unitCost())
+                        ? new PoLine(line.poItemId(), line.productId(), line.productName(), line.quantity(),
+                                returnedQuantity, line.unitCost())
                         : line);
             }
             snapshots.put(poId, new PoSnapshot(
