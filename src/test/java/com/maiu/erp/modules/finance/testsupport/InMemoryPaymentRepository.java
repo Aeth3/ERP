@@ -38,4 +38,9 @@ public final class InMemoryPaymentRepository implements PaymentRepository {
     public List<Payment> findAll() {
         return List.copyOf(payments);
     }
+
+    @Override
+    public boolean existsByPaymentNumber(String paymentNumber) {
+        return payments.stream().anyMatch(payment -> paymentNumber.equals(payment.getPaymentNumber()));
+    }
 }

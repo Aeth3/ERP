@@ -11,6 +11,11 @@ import com.maiu.erp.modules.finance.domain.repository.BillRepository;
 
 public final class InMemoryBillRepository implements BillRepository {
     private final List<Bill> bills = new ArrayList<>();
+    private int forUpdateCalls;
+
+    public int getForUpdateCalls() {
+        return forUpdateCalls;
+    }
 
     @Override
     public Bill save(Bill bill) {
@@ -31,6 +36,12 @@ public final class InMemoryBillRepository implements BillRepository {
     }
 
     @Override
+    public Optional<Bill> findByIdForUpdate(UUID id) {
+        forUpdateCalls++;
+        return findById(id);
+    }
+
+    @Override
     public List<Bill> findByPurchaseOrderId(UUID purchaseOrderId) {
         return bills.stream().filter(bill -> purchaseOrderId.equals(bill.getPurchaseOrderId())).toList();
     }
@@ -45,9 +56,10 @@ public final class InMemoryBillRepository implements BillRepository {
     }
 
     @Override
-    public boolean existsBySupplierIdAndBillNumberAndStatusNot(UUID supplierId, String billNumber, BillStatus excluded) {
+    public boolean existsBySupplierIdAndBillNumberIgnoreCaseAndStatusNot(UUID supplierId, String billNumber,
+            BillStatus excluded) {
         return bills.stream().anyMatch(bill -> supplierId.equals(bill.getSupplierId())
-                && billNumber.equals(bill.getBillNumber())
+                && billNumber.equalsIgnoreCase(bill.getBillNumber())
                 && bill.getStatus() != excluded);
     }
 

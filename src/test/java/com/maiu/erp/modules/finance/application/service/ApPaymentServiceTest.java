@@ -166,6 +166,35 @@ class ApPaymentServiceTest {
                 List.of(new AllocationReq(bill.getId(), new BigDecimal("31.00"))))));
     }
 
+    // --- review-pass regressions ---
+
+    @Test
+    void create_generatesSequentialPaymentNumbers() {
+        Bill bill = approvedBill(UUID.randomUUID(), "100.00", "0.00");
+
+        Payment first = service.create(new CreatePaymentRequest(
+                bill.getSupplierId(), PAY_DATE, PaymentMethod.BANK, null,
+                List.of(new AllocationReq(bill.getId(), new BigDecimal("30.00")))));
+        Payment second = service.create(new CreatePaymentRequest(
+                bill.getSupplierId(), PAY_DATE, PaymentMethod.BANK, null,
+                List.of(new AllocationReq(bill.getId(), new BigDecimal("30.00")))));
+
+        assertEquals("PAY-202611-0001", first.getPaymentNumber());
+        assertEquals("PAY-202611-0002", second.getPaymentNumber());
+    }
+
+    @Test
+    void create_loadsBillsWithUpdateLock() {
+        Bill bill = approvedBill(UUID.randomUUID(), "100.00", "0.00");
+
+        service.create(new CreatePaymentRequest(
+                bill.getSupplierId(), PAY_DATE, PaymentMethod.BANK, null,
+                List.of(new AllocationReq(bill.getId(), new BigDecimal("40.00")))));
+
+        assertTrue(billRepository.getForUpdateCalls() > 0,
+                "payment must load bills with findByIdForUpdate");
+    }
+
     // --- helpers ---
 
     private Bill approvedBill(UUID supplierId, String total, String amountPaid) {

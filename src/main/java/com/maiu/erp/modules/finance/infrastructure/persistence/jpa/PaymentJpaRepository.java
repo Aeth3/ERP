@@ -9,4 +9,6 @@ import com.maiu.erp.modules.finance.infrastructure.persistence.entity.PaymentEnt
 
 public interface PaymentJpaRepository extends JpaRepository<PaymentEntity, UUID> {
     List<PaymentEntity> findBySupplierId(UUID supplierId);
+
+    boolean existsByPaymentNumber(String paymentNumber);
 }

@@ -275,6 +275,43 @@ class ApBillServiceTest {
         assertEquals(BillStatus.APPROVED, service.approve(second.getId()).getStatus());
     }
 
+    // --- review-pass regressions ---
+
+    @Test
+    void approve_blocksOverBillingAcrossRepeatedLinesInOneBill() {
+        // 10 ordered, 7 billable after returns; two lines of 5 in ONE bill must not pass.
+        PoFixture po = receivedPo("10.00", "20.00");
+        purchaseOrderReader.setReturnedQuantity(po.poId(), po.itemId(), new BigDecimal("3.00"));
+
+        Bill bill = service.createDraft(request(po.supplierId(), po.poId(), "INV-1",
+                List.of(poLine(po.itemId(), "5.00", "20.00"), poLine(po.itemId(), "5.00", "20.00"))));
+
+        assertThrows(BadRequestException.class, () -> service.approve(bill.getId()));
+    }
+
+    @Test
+    void createDraft_storesProductIdFromPoAndRejectsForeignItems() {
+        PoFixture po = receivedPo("10.00", "20.00");
+
+        Bill bill = service.createDraft(
+                request(po.supplierId(), po.poId(), "INV-1", List.of(poLine(po.itemId(), "2.00", "20.00"))));
+        UUID expectedProductId = purchaseOrderReader.find(po.poId()).orElseThrow()
+                .lines().get(0).productId();
+        assertEquals(expectedProductId, bill.getLines().get(0).getProductId());
+
+        assertThrows(BadRequestException.class, () -> service.createDraft(
+                request(po.supplierId(), po.poId(), "INV-2", List.of(poLine(UUID.randomUUID(), "1.00", "20.00")))));
+    }
+
+    @Test
+    void createDraft_rejectsDuplicateBillNumberCaseInsensitiveAndTrimmed() {
+        UUID supplierId = UUID.randomUUID();
+        service.createDraft(request(supplierId, null, "INV-9", List.of(expenseLine("10.00"))));
+
+        assertThrows(ConflictException.class, () -> service.createDraft(
+                request(supplierId, null, " inv-9 ", List.of(expenseLine("20.00")))));
+    }
+
     // --- helpers ---
 
     private CreateBillRequest request(UUID supplierId, UUID poId, String billNumber, List<LineReq> lines) {

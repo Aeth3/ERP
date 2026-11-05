@@ -12,12 +12,16 @@ public interface BillRepository {
 
     Optional<Bill> findById(UUID id);
 
+    /** Loads with a write lock; use for any read that precedes a status or amountPaid change. */
+    Optional<Bill> findByIdForUpdate(UUID id);
+
     List<Bill> findByPurchaseOrderId(UUID purchaseOrderId);
 
     /** All filters optional; null means "any". */
     List<Bill> search(UUID supplierId, BillStatus status, UUID purchaseOrderId);
 
-    boolean existsBySupplierIdAndBillNumberAndStatusNot(UUID supplierId, String billNumber, BillStatus excluded);
+    boolean existsBySupplierIdAndBillNumberIgnoreCaseAndStatusNot(UUID supplierId, String billNumber,
+            BillStatus excluded);
 
     /** Bills with an outstanding balance: APPROVED or PARTIALLY_PAID. */
     List<Bill> findOpen();

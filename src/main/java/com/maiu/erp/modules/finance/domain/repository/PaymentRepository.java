@@ -14,4 +14,6 @@ public interface PaymentRepository {
     List<Payment> findBySupplierId(UUID supplierId);
 
     List<Payment> findAll();
+
+    boolean existsByPaymentNumber(String paymentNumber);
 }

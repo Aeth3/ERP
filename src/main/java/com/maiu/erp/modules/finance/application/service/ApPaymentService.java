@@ -86,7 +86,7 @@ public class ApPaymentService {
             if (allocation.amount() == null || allocation.amount().signum() <= 0) {
                 throw new BadRequestException("Allocation amount must be positive");
             }
-            Bill bill = billsById.computeIfAbsent(allocation.billId(), id -> billRepository.findById(id)
+            Bill bill = billsById.computeIfAbsent(allocation.billId(), id -> billRepository.findByIdForUpdate(id)
                     .orElseThrow(() -> new NotFoundException("Bill not found")));
             if (!request.supplierId().equals(bill.getSupplierId())) {
                 throw new BadRequestException("Bill " + bill.getBillNumber() + " belongs to another supplier");
@@ -177,11 +177,16 @@ public class ApPaymentService {
     }
 
     private String nextPaymentNumber(LocalDate paymentDate) {
-        String month = NUMBER_MONTH.format(paymentDate);
-        String prefix = "PAY-" + month + "-";
-        long inMonth = paymentRepository.findAll().stream()
+        String prefix = "PAY-" + NUMBER_MONTH.format(paymentDate) + "-";
+        long sequence = paymentRepository.findAll().stream()
                 .filter(payment -> payment.getPaymentNumber() != null && payment.getPaymentNumber().startsWith(prefix))
-                .count();
-        return prefix + String.format("%04d", inMonth + 1);
+                .count() + 1;
+        // Skip numbers already taken (gaps, concurrent creates); the unique column is the backstop.
+        String candidate = prefix + String.format("%04d", sequence);
+        while (paymentRepository.existsByPaymentNumber(candidate)) {
+            sequence++;
+            candidate = prefix + String.format("%04d", sequence);
+        }
+        return candidate;
     }
 }

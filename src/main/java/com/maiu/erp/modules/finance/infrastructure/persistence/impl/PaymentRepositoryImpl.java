@@ -42,6 +42,11 @@ public class PaymentRepositoryImpl implements PaymentRepository {
         return jpaRepository.findAll().stream().map(this::toDomain).toList();
     }
 
+    @Override
+    public boolean existsByPaymentNumber(String paymentNumber) {
+        return jpaRepository.existsByPaymentNumber(paymentNumber);
+    }
+
     private Payment toDomain(PaymentEntity entity) {
         Payment payment = new Payment();
         payment.setId(entity.getId());

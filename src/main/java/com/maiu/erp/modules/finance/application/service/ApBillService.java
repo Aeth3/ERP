@@ -81,9 +81,9 @@ public class ApBillService {
     @Transactional
     public Bill createDraft(CreateBillRequest request) {
         validateRequest(request);
-        if (billRepository.existsBySupplierIdAndBillNumberAndStatusNot(
-                request.supplierId(), request.billNumber(), BillStatus.CANCELLED)) {
-            throw new ConflictException("Supplier already has a bill numbered " + request.billNumber());
+        if (billRepository.existsBySupplierIdAndBillNumberIgnoreCaseAndStatusNot(
+                request.supplierId(), billNumberOf(request), BillStatus.CANCELLED)) {
+            throw new ConflictException("Supplier already has a bill numbered " + billNumberOf(request));
         }
         Bill bill = new Bill();
         bill.setStatus(BillStatus.DRAFT);
@@ -95,16 +95,16 @@ public class ApBillService {
 
     @Transactional
     public Bill updateDraft(UUID id, CreateBillRequest request) {
-        Bill bill = get(id);
+        Bill bill = getForUpdate(id);
         if (bill.getStatus() != BillStatus.DRAFT) {
             throw new BadRequestException("Only draft bills can be edited");
         }
         validateRequest(request);
-        boolean numberChanged = !bill.getBillNumber().equals(request.billNumber())
+        boolean numberChanged = !bill.getBillNumber().equalsIgnoreCase(billNumberOf(request))
                 || !bill.getSupplierId().equals(request.supplierId());
-        if (numberChanged && billRepository.existsBySupplierIdAndBillNumberAndStatusNot(
-                request.supplierId(), request.billNumber(), BillStatus.CANCELLED)) {
-            throw new ConflictException("Supplier already has a bill numbered " + request.billNumber());
+        if (numberChanged && billRepository.existsBySupplierIdAndBillNumberIgnoreCaseAndStatusNot(
+                request.supplierId(), billNumberOf(request), BillStatus.CANCELLED)) {
+            throw new ConflictException("Supplier already has a bill numbered " + billNumberOf(request));
         }
         applyRequest(bill, request);
         return billRepository.save(bill);
@@ -112,7 +112,7 @@ public class ApBillService {
 
     @Transactional
     public Bill approve(UUID id) {
-        Bill bill = get(id);
+        Bill bill = getForUpdate(id);
         if (bill.getStatus() != BillStatus.DRAFT) {
             throw new BadRequestException("Only draft bills can be approved");
         }
@@ -135,7 +135,7 @@ public class ApBillService {
 
     @Transactional
     public Bill cancel(UUID id) {
-        Bill bill = get(id);
+        Bill bill = getForUpdate(id);
         switch (bill.getStatus()) {
             case DRAFT -> bill.setStatus(BillStatus.CANCELLED);
             case APPROVED -> {
@@ -156,6 +156,14 @@ public class ApBillService {
 
     public Bill get(UUID id) {
         return billRepository.findById(id).orElseThrow(() -> new NotFoundException("Bill not found"));
+    }
+
+    private Bill getForUpdate(UUID id) {
+        return billRepository.findByIdForUpdate(id).orElseThrow(() -> new NotFoundException("Bill not found"));
+    }
+
+    private static String billNumberOf(CreateBillRequest request) {
+        return request.billNumber() == null ? null : request.billNumber().trim();
     }
 
     public List<Bill> search(UUID supplierId, BillStatus status, UUID purchaseOrderId) {
@@ -211,10 +219,19 @@ public class ApBillService {
     private void applyRequest(Bill bill, CreateBillRequest request) {
         bill.setSupplierId(request.supplierId());
         bill.setPurchaseOrderId(request.purchaseOrderId());
-        bill.setBillNumber(request.billNumber());
+        bill.setBillNumber(billNumberOf(request));
         bill.setBillDate(request.billDate());
         bill.setDueDate(request.dueDate());
         bill.setNotes(request.notes());
+
+        Map<UUID, PoLine> poLinesByItemId = new HashMap<>();
+        if (request.purchaseOrderId() != null) {
+            PoSnapshot snapshot = purchaseOrderReader.find(request.purchaseOrderId())
+                    .orElseThrow(() -> new NotFoundException("Purchase order not found"));
+            for (PoLine poLine : snapshot.lines()) {
+                poLinesByItemId.put(poLine.poItemId(), poLine);
+            }
+        }
 
         List<BillLine> lines = new ArrayList<>();
         int lineNumber = 1;
@@ -224,7 +241,12 @@ public class ApBillService {
             line.setLineNumber(lineNumber++);
             line.setDescription(lineReq.description());
             if (request.purchaseOrderId() != null) {
+                PoLine poLine = poLinesByItemId.get(lineReq.purchaseOrderItemId());
+                if (poLine == null) {
+                    throw new BadRequestException("Bill line does not reference an item of the purchase order");
+                }
                 line.setPurchaseOrderItemId(lineReq.purchaseOrderItemId());
+                line.setProductId(poLine.productId());
                 line.setQuantity(lineReq.quantity());
                 line.setUnitCost(lineReq.unitCost());
                 line.setLineTotal(money(lineReq.quantity().multiply(lineReq.unitCost())));
@@ -271,8 +293,9 @@ public class ApBillService {
                 throw new BadRequestException("Bill line does not reference an item of the purchase order");
             }
             BigDecimal billable = poLine.quantity().subtract(poLine.returnedQuantity());
-            BigDecimal cumulative = alreadyBilled.getOrDefault(line.getPurchaseOrderItemId(), BigDecimal.ZERO)
-                    .add(line.getQuantity());
+            // merge() keeps repeated lines for the same PO item cumulative within this bill too.
+            BigDecimal cumulative = alreadyBilled.merge(
+                    line.getPurchaseOrderItemId(), line.getQuantity(), BigDecimal::add);
             if (cumulative.compareTo(billable) > 0) {
                 throw new BadRequestException(
                         "Billed quantity would exceed the billable quantity (ordered minus returned) for product "

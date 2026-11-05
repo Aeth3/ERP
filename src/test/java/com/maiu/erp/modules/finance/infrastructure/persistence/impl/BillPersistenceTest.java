@@ -88,10 +88,11 @@ class BillPersistenceTest {
         assertEquals(1, billRepository.findByPurchaseOrderId(poId).size());
         assertEquals(1, billRepository.search(supplierId, BillStatus.DRAFT, poId).size());
         assertEquals(0, billRepository.search(supplierId, BillStatus.PAID, null).size());
-        assertTrue(billRepository.existsBySupplierIdAndBillNumberAndStatusNot(
-                supplierId, "INV-001", BillStatus.CANCELLED));
-        assertFalse(billRepository.existsBySupplierIdAndBillNumberAndStatusNot(
+        assertTrue(billRepository.existsBySupplierIdAndBillNumberIgnoreCaseAndStatusNot(
+                supplierId, "inv-001", BillStatus.CANCELLED));
+        assertFalse(billRepository.existsBySupplierIdAndBillNumberIgnoreCaseAndStatusNot(
                 UUID.randomUUID(), "INV-001", BillStatus.CANCELLED));
+        assertTrue(billRepository.findByIdForUpdate(savedBill.getId()).isPresent());
         assertEquals(0, billRepository.findOpen().size());
 
         Payment payment = new Payment();

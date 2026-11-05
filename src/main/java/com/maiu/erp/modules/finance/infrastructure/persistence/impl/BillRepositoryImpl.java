@@ -34,6 +34,11 @@ public class BillRepositoryImpl implements BillRepository {
     }
 
     @Override
+    public Optional<Bill> findByIdForUpdate(UUID id) {
+        return jpaRepository.findByIdForUpdate(id).map(this::toDomain);
+    }
+
+    @Override
     public List<Bill> findByPurchaseOrderId(UUID purchaseOrderId) {
         return jpaRepository.findByPurchaseOrderId(purchaseOrderId).stream().map(this::toDomain).toList();
     }
@@ -44,8 +49,9 @@ public class BillRepositoryImpl implements BillRepository {
     }
 
     @Override
-    public boolean existsBySupplierIdAndBillNumberAndStatusNot(UUID supplierId, String billNumber, BillStatus excluded) {
-        return jpaRepository.existsBySupplierIdAndBillNumberAndStatusNot(supplierId, billNumber, excluded);
+    public boolean existsBySupplierIdAndBillNumberIgnoreCaseAndStatusNot(UUID supplierId, String billNumber,
+            BillStatus excluded) {
+        return jpaRepository.existsBySupplierIdAndBillNumberIgnoreCaseAndStatusNot(supplierId, billNumber, excluded);
     }
 
     @Override
